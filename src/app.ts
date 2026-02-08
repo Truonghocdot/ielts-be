@@ -1,7 +1,9 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import multipart from "@fastify/multipart";
-import rateLimit from "@fastify/rate-limit";
+import staticPlugin from "@fastify/static";
+import { join } from "path";
+import { existsSync, mkdirSync } from "fs";
 import { env } from "./config/env.js";
 import prismaPlugin from "./plugins/prisma.js";
 import authPlugin from "./plugins/auth.js";
@@ -15,9 +17,7 @@ export async function buildApp() {
         env.NODE_ENV !== "production"
           ? {
               target: "pino-pretty",
-              options: {
-                colorize: true,
-              },
+              options: { colorize: true },
             }
           : undefined,
     },
@@ -29,17 +29,24 @@ export async function buildApp() {
     credentials: true,
   });
 
-  // Rate limiting
-  await app.register(rateLimit, {
-    max: 100,
-    timeWindow: "1 minute",
-  });
-
-  // File upload
+  // File upload (multipart)
   await app.register(multipart, {
     limits: {
-      fileSize: 50 * 1024 * 1024, // 50MB
+      fileSize: parseInt(env.MAX_FILE_SIZE), // 50MB default
     },
+  });
+
+  // Ensure upload directory exists
+  const uploadDir = join(process.cwd(), env.UPLOAD_DIR);
+  if (!existsSync(uploadDir)) {
+    mkdirSync(uploadDir, { recursive: true });
+  }
+
+  // Serve static files (uploaded files)
+  await app.register(staticPlugin, {
+    root: uploadDir,
+    prefix: "/uploads/",
+    decorateReply: false,
   });
 
   // Plugins
@@ -50,7 +57,7 @@ export async function buildApp() {
   await app.register(routes, { prefix: "/api/v1" });
 
   // Global error handler
-  app.setErrorHandler((error, request, reply) => {
+  app.setErrorHandler((error, _request, reply) => {
     app.log.error(error);
 
     const statusCode = error.statusCode || 500;
@@ -65,7 +72,7 @@ export async function buildApp() {
   });
 
   // Not found handler
-  app.setNotFoundHandler((request, reply) => {
+  app.setNotFoundHandler((_request, reply) => {
     reply.status(404).send({
       error: "Route not found",
       statusCode: 404,

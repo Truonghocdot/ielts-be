@@ -14,6 +14,12 @@ export const registerSchema = z.object({
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 
+export const googleLoginSchema = z.object({
+  credential: z.string().min(1, "Credential is required"),
+});
+
+export type GoogleLoginInput = z.infer<typeof googleLoginSchema>;
+
 export const userResponseSchema = z.object({
   id: z.string(),
   email: z.string(),

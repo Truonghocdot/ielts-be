@@ -10,20 +10,19 @@ import {
 import { OAuth2Client } from "google-auth-library";
 import { hashPassword, verifyPassword } from "../utils/password.js";
 import { authenticate } from "../middlewares/auth.middleware.js";
+import { handleValidation } from "../utils/validation.js";
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /auth/register
   fastify.post<{ Body: RegisterInput }>("/register", async (request, reply) => {
-    const validation = registerSchema.safeParse(request.body);
+    const data = handleValidation(
+      registerSchema.safeParse(request.body),
+      request,
+      reply,
+    );
+    if (!data) return;
 
-    if (!validation.success) {
-      return reply.status(400).send({
-        error: "Validation failed",
-        details: validation.error.flatten().fieldErrors,
-      });
-    }
-
-    const { email, password, fullName } = validation.data;
+    const { email, password, fullName } = data;
 
     // Check if email exists
     const existing = await fastify.prisma.user.findUnique({
@@ -31,7 +30,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     if (existing) {
-      return reply.status(409).send({ error: "Email already registered" });
+      return reply.status(409).send({ error: "Email đã được đăng ký" });
     }
 
     // Create user
@@ -70,16 +69,14 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
 
   // POST /auth/login
   fastify.post<{ Body: LoginInput }>("/login", async (request, reply) => {
-    const validation = loginSchema.safeParse(request.body);
+    const data = handleValidation(
+      loginSchema.safeParse(request.body),
+      request,
+      reply,
+    );
+    if (!data) return;
 
-    if (!validation.success) {
-      return reply.status(400).send({
-        error: "Validation failed",
-        details: validation.error.flatten().fieldErrors,
-      });
-    }
-
-    const { email, password } = validation.data;
+    const { email, password } = data;
 
     // Find user
     const user = await fastify.prisma.user.findUnique({
@@ -88,18 +85,22 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     if (!user) {
-      return reply.status(401).send({ error: "Invalid email or password" });
+      return reply
+        .status(401)
+        .send({ error: "Email hoặc mật khẩu không đúng" });
     }
 
     // Verify password
     const validPassword = await verifyPassword(password, user.password);
 
     if (!validPassword) {
-      return reply.status(401).send({ error: "Invalid email or password" });
+      return reply
+        .status(401)
+        .send({ error: "Email hoặc mật khẩu không đúng" });
     }
 
     if (!user.isActive) {
-      return reply.status(403).send({ error: "Account is deactivated" });
+      return reply.status(403).send({ error: "Tài khoản đã bị hủy kích hoạt" });
     }
 
     // Generate token
@@ -125,16 +126,14 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Body: GoogleLoginInput }>(
     "/login/google",
     async (request, reply) => {
-      const validation = googleLoginSchema.safeParse(request.body);
+      const data = handleValidation(
+        googleLoginSchema.safeParse(request.body),
+        request,
+        reply,
+      );
+      if (!data) return;
 
-      if (!validation.success) {
-        return reply.status(400).send({
-          error: "Validation failed",
-          details: validation.error.flatten().fieldErrors,
-        });
-      }
-
-      const { credential } = validation.data;
+      const { credential } = data;
       const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
       let payload;
@@ -145,13 +144,13 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         });
         payload = ticket.getPayload();
       } catch (error) {
-        return reply.status(401).send({ error: "Invalid Google Token" });
+        return reply.status(401).send({ error: "Token Google không hợp lệ" });
       }
 
       if (!payload || !payload.email) {
         return reply
           .status(400)
-          .send({ error: "Invalid Google Token payload" });
+          .send({ error: "Payload Token Google không hợp lệ" });
       }
 
       const { email, name, picture, sub: googleId } = payload;
@@ -197,7 +196,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       if (!user.isActive) {
-        return reply.status(403).send({ error: "Account is deactivated" });
+        return reply
+          .status(403)
+          .send({ error: "Tài khoản đã bị hủy kích hoạt" });
       }
 
       // Generate token
@@ -230,7 +231,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     if (!user) {
-      return reply.status(404).send({ error: "User not found" });
+      return reply.status(404).send({ error: "Không tìm thấy người dùng" });
     }
 
     return {
@@ -283,13 +284,13 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       if (!currentPassword || !newPassword) {
         return reply
           .status(400)
-          .send({ error: "Current and new password are required" });
+          .send({ error: "Yêu cầu mật khẩu hiện tại và mật khẩu mới" });
       }
 
       if (newPassword.length < 6) {
         return reply
           .status(400)
-          .send({ error: "New password must be at least 6 characters" });
+          .send({ error: "Mật khẩu mới phải có ít nhất 6 ký tự" });
       }
 
       const user = await fastify.prisma.user.findUnique({
@@ -297,7 +298,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       if (!user) {
-        return reply.status(404).send({ error: "User not found" });
+        return reply.status(404).send({ error: "Không tìm thấy người dùng" });
       }
 
       const validPassword = await verifyPassword(
@@ -308,7 +309,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       if (!validPassword) {
         return reply
           .status(400)
-          .send({ error: "Current password is incorrect" });
+          .send({ error: "Mật khẩu hiện tại không chính xác" });
       }
 
       const hashedPassword = await hashPassword(newPassword);
@@ -318,7 +319,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         data: { password: hashedPassword },
       });
 
-      return { message: "Password changed successfully" };
+      return { message: "Mật khẩu đã được thay đổi thành công" };
     },
   );
 };

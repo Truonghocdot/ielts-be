@@ -9,6 +9,7 @@ import submissionsRoutes from "./submissions.routes.js";
 import usersRoutes from "./users.routes.js";
 import enrollmentsRoutes from "./enrollments.routes.js";
 import uploadsRoutes from "./uploads.routes.js";
+import logsRoutes from "./logs.routes.js";
 
 const routes: FastifyPluginAsync = async (fastify) => {
   // Health check
@@ -30,6 +31,7 @@ const routes: FastifyPluginAsync = async (fastify) => {
   await fastify.register(usersRoutes, { prefix: "/users" });
   await fastify.register(enrollmentsRoutes, { prefix: "/enrollments" });
   await fastify.register(uploadsRoutes, { prefix: "/uploads" });
+  await fastify.register(logsRoutes, { prefix: "/admin" });
 };
 
 export default routes;

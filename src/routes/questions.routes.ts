@@ -1,20 +1,28 @@
 import { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { authenticate, requireRoles } from "../middlewares/auth.middleware.js";
+import { handleValidation } from "../utils/validation.js";
 
-const questionTypeEnum = z.enum([
-  "multiple_choice",
-  "fill_blank",
-  "matching",
-  "essay",
-  "speaking",
-  "short_answer",
-  "true_false_not_given",
-  "yes_no_not_given",
-]);
+const questionTypeEnum = z.enum(
+  [
+    "multiple_choice",
+    "fill_blank",
+    "matching",
+    "essay",
+    "speaking",
+    "short_answer",
+    "true_false_not_given",
+    "yes_no_not_given",
+  ],
+  {
+    errorMap: () => ({
+      message: "Loại câu hỏi không hợp lệ",
+    }),
+  },
+);
 
 const createQuestionGroupSchema = z.object({
-  sectionId: z.string().uuid(),
+  sectionId: z.string({ required_error: "ID phần thi là bắt buộc" }),
   title: z.string().optional(),
   instructions: z.string().optional(),
   passage: z.string().optional(),
@@ -22,12 +30,12 @@ const createQuestionGroupSchema = z.object({
 });
 
 const createQuestionSchema = z.object({
-  groupId: z.string().uuid(),
+  groupId: z.string({ required_error: "ID nhóm câu hỏi là bắt buộc" }),
   questionType: questionTypeEnum,
-  questionText: z.string().min(1),
+  questionText: z.string().min(1, "Nội dung câu hỏi là bắt buộc"),
   options: z.any().optional(),
   correctAnswer: z.string().optional(),
-  points: z.number().int().default(1),
+  points: z.number({ invalid_type_error: "Điểm phải là số" }).int().default(1),
   orderIndex: z.number().int().default(0),
 });
 
@@ -39,19 +47,15 @@ const questionsRoutes: FastifyPluginAsync = async (fastify) => {
     "/groups",
     { preHandler: [authenticate, requireRoles("admin", "teacher")] },
     async (request, reply) => {
-      const validation = createQuestionGroupSchema.safeParse(request.body);
-
-      if (!validation.success) {
-        return reply
-          .status(400)
-          .send({
-            error: "Validation failed",
-            details: validation.error.flatten().fieldErrors,
-          });
-      }
+      const data = handleValidation(
+        createQuestionGroupSchema.safeParse(request.body),
+        request,
+        reply,
+      );
+      if (!data) return;
 
       const group = await fastify.prisma.questionGroup.create({
-        data: validation.data,
+        data,
       });
 
       return reply.status(201).send(group);
@@ -93,19 +97,15 @@ const questionsRoutes: FastifyPluginAsync = async (fastify) => {
     "/",
     { preHandler: [authenticate, requireRoles("admin", "teacher")] },
     async (request, reply) => {
-      const validation = createQuestionSchema.safeParse(request.body);
-
-      if (!validation.success) {
-        return reply
-          .status(400)
-          .send({
-            error: "Validation failed",
-            details: validation.error.flatten().fieldErrors,
-          });
-      }
+      const data = handleValidation(
+        createQuestionSchema.safeParse(request.body),
+        request,
+        reply,
+      );
+      if (!data) return;
 
       const question = await fastify.prisma.question.create({
-        data: validation.data as any,
+        data: data as any,
       });
 
       return reply.status(201).send(question);
@@ -150,7 +150,7 @@ const questionsRoutes: FastifyPluginAsync = async (fastify) => {
       if (!Array.isArray(questions) || !groupId) {
         return reply
           .status(400)
-          .send({ error: "questions array and groupId are required" });
+          .send({ error: "Yêu cầu mảng questions và groupId" });
       }
 
       const created = await fastify.prisma.question.createMany({

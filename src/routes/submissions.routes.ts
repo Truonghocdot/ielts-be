@@ -2,20 +2,24 @@ import { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { paginationSchema } from "../schemas/common.schema.js";
 import { authenticate, requireRoles } from "../middlewares/auth.middleware.js";
+import { handleValidation } from "../utils/validation.js";
 
-const submissionStatusEnum = z.enum(["in_progress", "submitted", "graded"]);
+const submissionStatusEnum = z.enum(["in_progress", "submitted", "graded"], {
+  errorMap: () => ({ message: "Trạng thái bài nộp không hợp lệ" }),
+});
 
 const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /submissions - List submissions (for current user or all for admin/teacher)
   fastify.get("/", { preHandler: authenticate }, async (request, reply) => {
-    const query = paginationSchema.safeParse(request.query);
+    const dataQuery = handleValidation(
+      paginationSchema.safeParse(request.query),
+      request,
+      reply,
+    );
+    if (!dataQuery) return;
+
     const { examId, studentId, status } = request.query as any;
-
-    if (!query.success) {
-      return reply.status(400).send({ error: "Invalid query parameters" });
-    }
-
-    const { page, limit, sortBy = "createdAt", sortOrder } = query.data;
+    const { page, limit, sortBy = "createdAt", sortOrder } = dataQuery;
     const skip = (page - 1) * limit;
     const user = request.user;
 
@@ -92,14 +96,14 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       if (!submission) {
-        return reply.status(404).send({ error: "Submission not found" });
+        return reply.status(404).send({ error: "Không tìm thấy bài nộp" });
       }
 
       // Check access permission
       const isAdminOrTeacher =
         user.roles.includes("admin") || user.roles.includes("teacher");
       if (!isAdminOrTeacher && submission.studentId !== user.id) {
-        return reply.status(403).send({ error: "Access denied" });
+        return reply.status(403).send({ error: "Từ chối truy cập" });
       }
 
       return submission;
@@ -112,7 +116,7 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
     const user = request.user;
 
     if (!examId) {
-      return reply.status(400).send({ error: "examId is required" });
+      return reply.status(400).send({ error: "Yêu cầu examId" });
     }
 
     // Check if exam exists and is published
@@ -121,11 +125,11 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     if (!exam) {
-      return reply.status(404).send({ error: "Exam not found" });
+      return reply.status(404).send({ error: "Không tìm thấy bài thi" });
     }
 
     if (!exam.isPublished) {
-      return reply.status(400).send({ error: "Exam is not published yet" });
+      return reply.status(400).send({ error: "Bài thi chưa được xuất bản" });
     }
 
     // Check if user already has an in-progress submission
@@ -166,17 +170,15 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       if (!submission) {
-        return reply.status(404).send({ error: "Submission not found" });
+        return reply.status(404).send({ error: "Không tìm thấy bài nộp" });
       }
 
       if (submission.studentId !== user.id) {
-        return reply.status(403).send({ error: "Access denied" });
+        return reply.status(403).send({ error: "Từ chối truy cập" });
       }
 
       if (submission.status !== "in_progress") {
-        return reply
-          .status(400)
-          .send({ error: "Cannot modify a submitted submission" });
+        return reply.status(400).send({ error: "Không thể sửa bài đã nộp" });
       }
 
       // Save answers
@@ -235,13 +237,13 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       if (!submission) {
-        return reply.status(404).send({ error: "Submission not found" });
+        return reply.status(404).send({ error: "Không tìm thấy bài nộp" });
       }
 
       if (submission.status === "in_progress") {
         return reply
           .status(400)
-          .send({ error: "Submission is still in progress" });
+          .send({ error: "Bài thi vẫn đang trong quá trình thực hiện" });
       }
 
       // Update individual answer grades

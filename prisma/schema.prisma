@@ -1,6 +1,3 @@
-// This is your Prisma schema file for MySQL
-// Learn more: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,9 +7,201 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// =============================================
-// ENUMS
-// =============================================
+model User {
+  id                String           @id @default(uuid())
+  email             String           @unique
+  password          String
+  fullName          String?          @map("full_name")
+  avatarUrl         String?          @map("avatar_url") @db.Text
+  bio               String?          @db.Text
+  isActive          Boolean          @default(true) @map("is_active")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  googleId          String?          @unique @map("google_id")
+  courses           Course[]         @relation("TeacherCourses")
+  enrollments       Enrollment[]
+  gradedSubmissions ExamSubmission[] @relation("GraderSubmissions")
+  submissions       ExamSubmission[] @relation("StudentSubmissions")
+  highlights        Highlight[]
+  roles             UserRole[]
+
+  @@map("users")
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  role      AppRole  @default(student)
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@map("user_roles")
+}
+
+model Course {
+  id           String       @id @default(uuid())
+  title        String       @db.VarChar(255)
+  description  String?      @db.Text
+  thumbnailUrl String?      @map("thumbnail_url") @db.Text
+  level        String       @default("beginner") @db.VarChar(50)
+  teacherId    String?      @map("teacher_id")
+  price        Decimal      @default(0.00) @db.Decimal(10, 2)
+  isPublished  Boolean      @default(false) @map("is_published")
+  isActive     Boolean      @default(true) @map("is_active")
+  syllabus     Json?
+  slug         String?      @unique @db.VarChar(255)
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  teacher      User?        @relation("TeacherCourses", fields: [teacherId], references: [id])
+  enrollments  Enrollment[]
+  exams        Exam[]
+
+  @@index([teacherId], map: "courses_teacher_id_fkey")
+  @@map("courses")
+}
+
+model Enrollment {
+  id              String   @id @default(uuid())
+  courseId        String   @map("course_id")
+  studentId       String   @map("student_id")
+  enrolledAt      DateTime @default(now()) @map("enrolled_at")
+  progressPercent Int?     @default(0) @map("progress_percent")
+  course          Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  student         User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, studentId])
+  @@index([studentId], map: "enrollments_student_id_fkey")
+  @@map("enrollments")
+}
+
+model Exam {
+  id              String           @id @default(uuid())
+  courseId        String           @map("course_id")
+  title           String           @db.VarChar(255)
+  description     String?          @db.Text
+  week            Int?             @default(1)
+  durationMinutes Int?             @default(60) @map("duration_minutes")
+  isPublished     Boolean          @default(false) @map("is_published")
+  isActive        Boolean          @default(true) @map("is_active")
+  examType        String           @default("ielts") @map("exam_type") @db.VarChar(50)
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  sections        ExamSection[]
+  submissions     ExamSubmission[]
+  course          Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId], map: "exams_course_id_fkey")
+  @@map("exams")
+}
+
+model ExamSection {
+  id              String          @id @default(uuid())
+  examId          String          @map("exam_id")
+  sectionType     ExamSectionType @map("section_type")
+  title           String          @db.VarChar(255)
+  instructions    String?         @db.Text
+  content         Json?
+  audioUrl        String?         @map("audio_url") @db.Text
+  durationMinutes Int?            @map("duration_minutes")
+  orderIndex      Int?            @default(0) @map("order_index")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  exam            Exam            @relation(fields: [examId], references: [id], onDelete: Cascade)
+  highlights      Highlight[]
+  questionGroups  QuestionGroup[]
+
+  @@index([examId], map: "exam_sections_exam_id_fkey")
+  @@map("exam_sections")
+}
+
+model QuestionGroup {
+  id           String      @id @default(uuid())
+  sectionId    String      @map("section_id")
+  title        String?     @db.VarChar(255)
+  instructions String?     @db.Text
+  passage      String?     @db.LongText
+  orderIndex   Int?        @default(0) @map("order_index")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  section      ExamSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  questions    Question[]
+
+  @@index([sectionId], map: "question_groups_section_id_fkey")
+  @@map("question_groups")
+}
+
+model Question {
+  id            String        @id @default(uuid())
+  groupId       String        @map("group_id")
+  questionType  QuestionType  @map("question_type")
+  questionText  String        @map("question_text") @db.Text
+  options       Json?
+  correctAnswer String?       @map("correct_answer") @db.Text
+  points        Int?          @default(1)
+  orderIndex    Int?          @default(0) @map("order_index")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  answers       Answer[]
+  group         QuestionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId], map: "questions_group_id_fkey")
+  @@map("questions")
+}
+
+model ExamSubmission {
+  id          String           @id @default(uuid())
+  examId      String           @map("exam_id")
+  studentId   String           @map("student_id")
+  status      SubmissionStatus @default(in_progress)
+  startedAt   DateTime?        @default(now()) @map("started_at")
+  submittedAt DateTime?        @map("submitted_at")
+  totalScore  Decimal?         @map("total_score") @db.Decimal(5, 2)
+  gradedBy    String?          @map("graded_by")
+  gradedAt    DateTime?        @map("graded_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  answers     Answer[]
+  exam        Exam             @relation(fields: [examId], references: [id], onDelete: Cascade)
+  grader      User?            @relation("GraderSubmissions", fields: [gradedBy], references: [id])
+  student     User             @relation("StudentSubmissions", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([examId], map: "exam_submissions_exam_id_fkey")
+  @@index([gradedBy], map: "exam_submissions_graded_by_fkey")
+  @@index([studentId], map: "exam_submissions_student_id_fkey")
+  @@map("exam_submissions")
+}
+
+model Answer {
+  id           String         @id @default(uuid())
+  submissionId String         @map("submission_id")
+  questionId   String         @map("question_id")
+  answerText   String?        @map("answer_text") @db.LongText
+  audioUrl     String?        @map("audio_url") @db.Text
+  score        Decimal?       @db.Decimal(5, 2)
+  feedback     String?        @db.Text
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  question     Question       @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  submission   ExamSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, questionId])
+  @@index([questionId], map: "answers_question_id_fkey")
+  @@map("answers")
+}
+
+model Highlight {
+  id         String      @id @default(uuid())
+  sectionId  String      @map("section_id")
+  studentId  String      @map("student_id")
+  startIndex Int         @map("start_index")
+  endIndex   Int         @map("end_index")
+  color      String?     @default("yellow") @db.VarChar(50)
+  createdAt  DateTime    @default(now()) @map("created_at")
+  section    ExamSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  student    User        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([sectionId], map: "highlights_section_id_fkey")
+  @@index([studentId], map: "highlights_student_id_fkey")
+  @@map("highlights")
+}
 
 enum AppRole {
   admin
@@ -43,203 +232,4 @@ enum SubmissionStatus {
   in_progress
   submitted
   graded
-}
-
-// =============================================
-// MODELS
-// =============================================
-
-model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  fullName  String?  @map("full_name")
-  avatarUrl String?  @map("avatar_url") @db.Text
-  bio       String?  @db.Text
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  googleId  String?  @unique @map("google_id")
-
-  roles           UserRole[]
-  courses         Course[]         @relation("TeacherCourses")
-  enrollments     Enrollment[]
-  submissions     ExamSubmission[] @relation("StudentSubmissions")
-  gradedSubmissions ExamSubmission[] @relation("GraderSubmissions")
-  highlights      Highlight[]
-
-  @@map("users")
-}
-
-model UserRole {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  role      AppRole  @default(student)
-  createdAt DateTime @default(now()) @map("created_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, role])
-  @@map("user_roles")
-}
-
-model Course {
-  id           String   @id @default(uuid())
-  title        String   @db.VarChar(255)
-  description  String?  @db.Text
-  thumbnailUrl String?  @map("thumbnail_url") @db.Text
-  level        String   @default("beginner") @db.VarChar(50)
-  teacherId    String?  @map("teacher_id")
-  price        Decimal  @default(0) @db.Decimal(10, 2)
-  isPublished  Boolean  @default(false) @map("is_published")
-  isActive     Boolean  @default(true) @map("is_active")
-  syllabus     Json?    @default("[]")
-  slug         String?  @unique @db.VarChar(255)
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-
-  teacher     User?        @relation("TeacherCourses", fields: [teacherId], references: [id], onDelete: SetNull)
-  enrollments Enrollment[]
-  exams       Exam[]
-
-  @@map("courses")
-}
-
-model Enrollment {
-  id              String   @id @default(uuid())
-  courseId        String   @map("course_id")
-  studentId       String   @map("student_id")
-  enrolledAt      DateTime @default(now()) @map("enrolled_at")
-  progressPercent Int?     @default(0) @map("progress_percent")
-
-  course  Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  student User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@unique([courseId, studentId])
-  @@map("enrollments")
-}
-
-model Exam {
-  id              String   @id @default(uuid())
-  courseId        String   @map("course_id")
-  title           String   @db.VarChar(255)
-  description     String?  @db.Text
-  week            Int?     @default(1)
-  durationMinutes Int?     @default(60) @map("duration_minutes")
-  isPublished     Boolean  @default(false) @map("is_published")
-  isActive        Boolean  @default(true) @map("is_active")
-  examType        String   @default("ielts") @map("exam_type") @db.VarChar(50)
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-
-  course      Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  sections    ExamSection[]
-  submissions ExamSubmission[]
-
-  @@map("exams")
-}
-
-model ExamSection {
-  id              String          @id @default(uuid())
-  examId          String          @map("exam_id")
-  sectionType     ExamSectionType @map("section_type")
-  title           String          @db.VarChar(255)
-  instructions    String?         @db.Text
-  content         Json?           @default("[]")
-  audioUrl        String?         @map("audio_url") @db.Text
-  durationMinutes Int?            @map("duration_minutes")
-  orderIndex      Int?            @default(0) @map("order_index")
-  createdAt       DateTime        @default(now()) @map("created_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
-
-  exam           Exam            @relation(fields: [examId], references: [id], onDelete: Cascade)
-  questionGroups QuestionGroup[]
-  highlights     Highlight[]
-
-  @@map("exam_sections")
-}
-
-model QuestionGroup {
-  id           String   @id @default(uuid())
-  sectionId    String   @map("section_id")
-  title        String?  @db.VarChar(255)
-  instructions String?  @db.Text
-  passage      String?  @db.LongText
-  orderIndex   Int?     @default(0) @map("order_index")
-  createdAt    DateTime @default(now()) @map("created_at")
-
-  section   ExamSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  questions Question[]
-
-  @@map("question_groups")
-}
-
-model Question {
-  id            String       @id @default(uuid())
-  groupId       String       @map("group_id")
-  questionType  QuestionType @map("question_type")
-  questionText  String       @map("question_text") @db.Text
-  options       Json?
-  correctAnswer String?      @map("correct_answer") @db.Text
-  points        Int?         @default(1)
-  orderIndex    Int?         @default(0) @map("order_index")
-  createdAt     DateTime     @default(now()) @map("created_at")
-
-  group   QuestionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  answers Answer[]
-
-  @@map("questions")
-}
-
-model ExamSubmission {
-  id          String           @id @default(uuid())
-  examId      String           @map("exam_id")
-  studentId   String           @map("student_id")
-  status      SubmissionStatus @default(in_progress)
-  startedAt   DateTime?        @default(now()) @map("started_at")
-  submittedAt DateTime?        @map("submitted_at")
-  totalScore  Decimal?         @map("total_score") @db.Decimal(5, 2)
-  gradedBy    String?          @map("graded_by")
-  gradedAt    DateTime?        @map("graded_at")
-  createdAt   DateTime         @default(now()) @map("created_at")
-
-  exam    Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
-  student User     @relation("StudentSubmissions", fields: [studentId], references: [id], onDelete: Cascade)
-  grader  User?    @relation("GraderSubmissions", fields: [gradedBy], references: [id], onDelete: SetNull)
-  answers Answer[]
-
-  @@map("exam_submissions")
-}
-
-model Answer {
-  id           String   @id @default(uuid())
-  submissionId String   @map("submission_id")
-  questionId   String   @map("question_id")
-  answerText   String?  @map("answer_text") @db.LongText
-  audioUrl     String?  @map("audio_url") @db.Text
-  score        Decimal? @db.Decimal(5, 2)
-  feedback     String?  @db.Text
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-
-  submission ExamSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  question   Question       @relation(fields: [questionId], references: [id], onDelete: Cascade)
-
-  @@unique([submissionId, questionId])
-  @@map("answers")
-}
-
-model Highlight {
-  id         String   @id @default(uuid())
-  sectionId  String   @map("section_id")
-  studentId  String   @map("student_id")
-  startIndex Int      @map("start_index")
-  endIndex   Int      @map("end_index")
-  color      String?  @default("yellow") @db.VarChar(50)
-  createdAt  DateTime @default(now()) @map("created_at")
-
-  section ExamSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  student User        @relation(fields: [studentId], references: [id], onDelete: Cascade)
-
-  @@map("highlights")
 }

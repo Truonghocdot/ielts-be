@@ -1,13 +1,17 @@
 import { z } from "zod";
 
 export const createCourseSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  description: z.string().optional(),
-  thumbnailUrl: z.string().url().optional(),
-  level: z.enum(["beginner", "intermediate", "advanced"]).default("beginner"),
-  price: z.number().min(0).default(0),
-  syllabus: z.any().optional(),
-  slug: z.string().optional(),
+  title: z.string().min(1, "Tiêu đề là bắt buộc"),
+  description: z.string().optional().nullable(),
+  thumbnailUrl: z.string().min(1, "URL ảnh không hợp lệ").optional().nullable(),
+  level: z
+    .enum(["beginner", "intermediate", "advanced"], {
+      errorMap: () => ({ message: "Cấp độ không hợp lệ" }),
+    })
+    .default("beginner"),
+  price: z.coerce.number().min(0, "Giá không được nhỏ hơn 0").default(0),
+  syllabus: z.any().optional().nullable(),
+  slug: z.string().optional().nullable(),
 });
 
 export const updateCourseSchema = createCourseSchema.partial().extend({

@@ -49,13 +49,15 @@ const uploadsRoutes: FastifyPluginAsync = async (fastify) => {
       const data = await (request as any).file();
 
       if (!data) {
-        return reply.status(400).send({ error: "No file uploaded" });
+        return reply
+          .status(400)
+          .send({ error: "Không có tệp nào được tải lên" });
       }
 
       // Check file type
       if (!ALLOWED_TYPES.includes(data.mimetype)) {
         return reply.status(400).send({
-          error: "Invalid file type",
+          error: "Loại tệp không hợp lệ",
           allowedTypes: ALLOWED_TYPES,
         });
       }
@@ -83,7 +85,7 @@ const uploadsRoutes: FastifyPluginAsync = async (fastify) => {
         };
       } catch (err) {
         fastify.log.error(err);
-        return reply.status(500).send({ error: "Failed to upload file" });
+        return reply.status(500).send({ error: "Tải tệp lên thất bại" });
       }
     },
   );
@@ -96,12 +98,14 @@ const uploadsRoutes: FastifyPluginAsync = async (fastify) => {
       const data = await (request as any).file();
 
       if (!data) {
-        return reply.status(400).send({ error: "No file uploaded" });
+        return reply
+          .status(400)
+          .send({ error: "Không có tệp nào được tải lên" });
       }
 
       if (!ALLOWED_IMAGE_TYPES.includes(data.mimetype)) {
         return reply.status(400).send({
-          error: "Invalid image type",
+          error: "Loại hình ảnh không hợp lệ",
           allowedTypes: ALLOWED_IMAGE_TYPES,
         });
       }
@@ -120,7 +124,7 @@ const uploadsRoutes: FastifyPluginAsync = async (fastify) => {
         };
       } catch (err) {
         fastify.log.error(err);
-        return reply.status(500).send({ error: "Failed to upload file" });
+        return reply.status(500).send({ error: "Tải tệp lên thất bại" });
       }
     },
   );
@@ -133,12 +137,14 @@ const uploadsRoutes: FastifyPluginAsync = async (fastify) => {
       const data = await (request as any).file();
 
       if (!data) {
-        return reply.status(400).send({ error: "No file uploaded" });
+        return reply
+          .status(400)
+          .send({ error: "Không có tệp nào được tải lên" });
       }
 
       if (!ALLOWED_AUDIO_TYPES.includes(data.mimetype)) {
         return reply.status(400).send({
-          error: "Invalid audio type",
+          error: "Loại âm thanh không hợp lệ",
           allowedTypes: ALLOWED_AUDIO_TYPES,
         });
       }
@@ -167,13 +173,13 @@ const uploadsRoutes: FastifyPluginAsync = async (fastify) => {
     const { url } = request.body as { url?: string };
 
     if (!url) {
-      return reply.status(400).send({ error: "URL is required" });
+      return reply.status(400).send({ error: "Yêu cầu URL" });
     }
 
     // Parse file path from URL
     const match = url.match(/\/uploads\/(images|audio)\/(.+)/);
     if (!match) {
-      return reply.status(400).send({ error: "Invalid file URL" });
+      return reply.status(400).send({ error: "URL tệp không hợp lệ" });
     }
 
     const [, subDir, fileName] = match;
@@ -182,13 +188,13 @@ const uploadsRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       if (existsSync(filePath)) {
         unlinkSync(filePath);
-        return { success: true, message: "File deleted" };
+        return { success: true, message: "Đã xóa tệp" };
       } else {
-        return reply.status(404).send({ error: "File not found" });
+        return reply.status(404).send({ error: "Không tìm thấy tệp" });
       }
     } catch (err) {
       fastify.log.error(err);
-      return reply.status(500).send({ error: "Failed to delete file" });
+      return reply.status(500).send({ error: "Xóa tệp thất bại" });
     }
   });
 };

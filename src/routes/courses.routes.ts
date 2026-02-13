@@ -7,6 +7,7 @@ import {
   UpdateCourseInput,
 } from "../schemas/course.schema.js";
 import { authenticate, requireRoles } from "../middlewares/auth.middleware.js";
+import { handleValidation } from "../utils/validation.js";
 
 const coursesRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /courses - List all courses (public)
@@ -14,7 +15,7 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
     const query = paginationSchema.safeParse(request.query);
 
     if (!query.success) {
-      return reply.status(400).send({ error: "Invalid query parameters" });
+      return reply.status(400).send({ error: "Tham số truy vấn không hợp lệ" });
     }
 
     const { page, limit, search, sortBy = "createdAt", sortOrder } = query.data;
@@ -80,7 +81,7 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     if (!course) {
-      return reply.status(404).send({ error: "Course not found" });
+      return reply.status(404).send({ error: "Không tìm thấy khóa học" });
     }
 
     return course;
@@ -118,17 +119,14 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
     "/",
     { preHandler: [authenticate, requireRoles("admin", "teacher")] },
     async (request, reply) => {
-      const validation = createCourseSchema.safeParse(request.body);
-
-      if (!validation.success) {
-        return reply.status(400).send({
-          error: "Validation failed",
-          details: validation.error.flatten().fieldErrors,
-        });
-      }
+      const data = handleValidation(
+        createCourseSchema.safeParse(request.body),
+        request,
+        reply,
+      );
+      if (!data) return;
 
       const { id: teacherId } = request.user;
-      const data = validation.data;
 
       // Generate slug if not provided
       if (!data.slug && data.title) {
@@ -156,14 +154,12 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [authenticate, requireRoles("admin", "teacher")] },
     async (request, reply) => {
       const { id } = request.params;
-      const validation = updateCourseSchema.safeParse(request.body);
-
-      if (!validation.success) {
-        return reply.status(400).send({
-          error: "Validation failed",
-          details: validation.error.flatten().fieldErrors,
-        });
-      }
+      const data = handleValidation(
+        updateCourseSchema.safeParse(request.body),
+        request,
+        reply,
+      );
+      if (!data) return;
 
       // Check if course exists
       const existing = await fastify.prisma.course.findUnique({
@@ -171,12 +167,12 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       if (!existing) {
-        return reply.status(404).send({ error: "Course not found" });
+        return reply.status(404).send({ error: "Không tìm thấy khóa học" });
       }
 
       const course = await fastify.prisma.course.update({
         where: { id },
-        data: validation.data,
+        data,
       });
 
       return course;

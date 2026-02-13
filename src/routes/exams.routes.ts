@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from "fastify";
 import { paginationSchema } from "../schemas/common.schema.js";
 import { createExamSchema, updateExamSchema } from "../schemas/exam.schema.js";
 import { authenticate, requireRoles } from "../middlewares/auth.middleware.js";
+import { handleValidation } from "../utils/validation.js";
 
 const examsRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /exams - List all exams
@@ -10,7 +11,7 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
     const { courseId } = request.query as any;
 
     if (!query.success) {
-      return reply.status(400).send({ error: "Invalid query parameters" });
+      return reply.status(400).send({ error: "Tham số truy vấn không hợp lệ" });
     }
 
     const { page, limit, search, sortBy = "createdAt", sortOrder } = query.data;
@@ -76,7 +77,7 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       if (!exam) {
-        return reply.status(404).send({ error: "Exam not found" });
+        return reply.status(404).send({ error: "Không tìm thấy bài thi" });
       }
 
       return exam;
@@ -88,17 +89,15 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
     "/",
     { preHandler: [authenticate, requireRoles("admin", "teacher")] },
     async (request, reply) => {
-      const validation = createExamSchema.safeParse(request.body);
-
-      if (!validation.success) {
-        return reply.status(400).send({
-          error: "Validation failed",
-          details: validation.error.flatten().fieldErrors,
-        });
-      }
+      const data = handleValidation(
+        createExamSchema.safeParse(request.body),
+        request,
+        reply,
+      );
+      if (!data) return;
 
       const exam = await fastify.prisma.exam.create({
-        data: validation.data,
+        data,
       });
 
       return reply.status(201).send(exam);
@@ -111,18 +110,16 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [authenticate, requireRoles("admin", "teacher")] },
     async (request, reply) => {
       const { id } = request.params;
-      const validation = updateExamSchema.safeParse(request.body);
-
-      if (!validation.success) {
-        return reply.status(400).send({
-          error: "Validation failed",
-          details: validation.error.flatten().fieldErrors,
-        });
-      }
+      const data = handleValidation(
+        updateExamSchema.safeParse(request.body),
+        request,
+        reply,
+      );
+      if (!data) return;
 
       const exam = await fastify.prisma.exam.update({
         where: { id },
-        data: validation.data,
+        data,
       });
 
       return exam;

@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from "fastify";
 import { paginationSchema } from "../schemas/common.schema.js";
 import { authenticate, requireRoles } from "../middlewares/auth.middleware.js";
 import { hashPassword } from "../utils/password.js";
+import { handleValidation } from "../utils/validation.js";
 
 const usersRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /users - List users (admin/teacher only)
@@ -9,12 +10,14 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
     "/",
     { preHandler: [authenticate, requireRoles("admin", "teacher")] },
     async (request, reply) => {
-      const query = paginationSchema.safeParse(request.query);
-      const { role } = request.query as any;
+      const dataQuery = handleValidation(
+        paginationSchema.safeParse(request.query),
+        request,
+        reply,
+      );
+      if (!dataQuery) return;
 
-      if (!query.success) {
-        return reply.status(400).send({ error: "Invalid query parameters" });
-      }
+      const { role } = request.query as any;
 
       const {
         page,
@@ -22,7 +25,7 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
         search,
         sortBy = "createdAt",
         sortOrder,
-      } = query.data;
+      } = dataQuery;
       const skip = (page - 1) * limit;
 
       const where: any = {};
@@ -97,7 +100,7 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       if (!user) {
-        return reply.status(404).send({ error: "User not found" });
+        return reply.status(404).send({ error: "Không tìm thấy người dùng" });
       }
 
       return {
@@ -120,9 +123,7 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
       } = request.body as any;
 
       if (!email || !password) {
-        return reply
-          .status(400)
-          .send({ error: "Email and password are required" });
+        return reply.status(400).send({ error: "Yêu cầu email và mật khẩu" });
       }
 
       const existing = await fastify.prisma.user.findUnique({
@@ -130,7 +131,7 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       if (existing) {
-        return reply.status(409).send({ error: "Email already exists" });
+        return reply.status(409).send({ error: "Email đã tồn tại" });
       }
 
       const hashedPassword = await hashPassword(password);

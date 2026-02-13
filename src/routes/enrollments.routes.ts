@@ -28,7 +28,7 @@ const enrollmentsRoutes: FastifyPluginAsync = async (fastify) => {
     const user = request.user;
 
     if (!courseId) {
-      return reply.status(400).send({ error: "courseId is required" });
+      return reply.status(400).send({ error: "Yêu cầu courseId" });
     }
 
     // Check course exists and is published
@@ -37,13 +37,13 @@ const enrollmentsRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     if (!course) {
-      return reply.status(404).send({ error: "Course not found" });
+      return reply.status(404).send({ error: "Không tìm thấy khóa học" });
     }
 
     if (!course.isPublished) {
       return reply
         .status(400)
-        .send({ error: "Course is not available for enrollment" });
+        .send({ error: "Khóa học không khả dụng để đăng ký" });
     }
 
     // Check if already enrolled
@@ -87,11 +87,11 @@ const enrollmentsRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       if (!enrollment) {
-        return reply.status(404).send({ error: "Enrollment not found" });
+        return reply.status(404).send({ error: "Không tìm thấy đăng ký" });
       }
 
       if (enrollment.studentId !== user.id) {
-        return reply.status(403).send({ error: "Access denied" });
+        return reply.status(403).send({ error: "Từ chối truy cập" });
       }
 
       const updated = await fastify.prisma.enrollment.update({
@@ -121,7 +121,7 @@ const enrollmentsRoutes: FastifyPluginAsync = async (fastify) => {
 
       const isAdmin = user.roles.includes("admin");
       if (!isAdmin && enrollment.studentId !== user.id) {
-        return reply.status(403).send({ error: "Access denied" });
+        return reply.status(403).send({ error: "Từ chối truy cập" });
       }
 
       await fastify.prisma.enrollment.delete({ where: { id } });

@@ -10,16 +10,28 @@ import authPlugin from "./plugins/auth.js";
 import routes from "./routes/index.js";
 
 export async function buildApp() {
+  const logFile = join(process.cwd(), "logs/app.log");
   const app = Fastify({
     logger: {
       level: env.NODE_ENV === "production" ? "info" : "debug",
-      transport:
-        env.NODE_ENV !== "production"
-          ? {
-              target: "pino-pretty",
-              options: { colorize: true },
-            }
-          : undefined,
+      transport: {
+        targets: [
+          ...(env.NODE_ENV !== "production"
+            ? [
+                {
+                  target: "pino-pretty",
+                  options: { colorize: true },
+                  level: "debug",
+                },
+              ]
+            : []),
+          {
+            target: "pino/file",
+            options: { destination: logFile },
+            level: "debug",
+          },
+        ],
+      },
     },
   });
 

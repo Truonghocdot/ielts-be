@@ -1,11 +1,15 @@
 import { z } from "zod";
 
 export const createExamSchema = z.object({
-  courseId: z.string().uuid(),
-  title: z.string().min(1, "Title is required"),
+  courseId: z.string(),
+  title: z.string().min(1, "Tiêu đề là bắt buộc"),
   description: z.string().optional(),
-  week: z.number().int().min(1).default(1),
-  durationMinutes: z.number().int().min(1).default(60),
+  week: z.number().int().min(1, "Tuần phải ít nhất là 1").default(1),
+  durationMinutes: z
+    .number()
+    .int()
+    .min(1, "Thời gian thi phải ít nhất là 1 phút")
+    .default(60),
   examType: z.string().default("ielts"),
 });
 

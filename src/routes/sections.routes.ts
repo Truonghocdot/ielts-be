@@ -1,23 +1,29 @@
 import { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { authenticate, requireRoles } from "../middlewares/auth.middleware.js";
+import { handleValidation } from "../utils/validation.js";
 
-const sectionTypeEnum = z.enum([
-  "listening",
-  "reading",
-  "writing",
-  "speaking",
-  "general",
-]);
+const sectionTypeEnum = z.enum(
+  ["listening", "reading", "writing", "speaking", "general"],
+  {
+    errorMap: () => ({
+      message:
+        "Loại phần thi không hợp lệ. Phải là: listening, reading, writing, speaking, general",
+    }),
+  },
+);
 
 const createSectionSchema = z.object({
-  examId: z.string().uuid(),
+  examId: z.string({ required_error: "ID bài thi là bắt buộc" }),
   sectionType: sectionTypeEnum,
-  title: z.string().min(1),
+  title: z.string().min(1, "Tiêu đề là bắt buộc"),
   instructions: z.string().optional(),
   content: z.any().optional(),
   audioUrl: z.string().optional(),
-  durationMinutes: z.number().int().optional(),
+  durationMinutes: z
+    .number({ invalid_type_error: "Thời gian phải là số" })
+    .int()
+    .optional(),
   orderIndex: z.number().int().default(0),
 });
 
@@ -42,7 +48,7 @@ const sectionsRoutes: FastifyPluginAsync = async (fastify) => {
       });
 
       if (!section) {
-        return reply.status(404).send({ error: "Section not found" });
+        return reply.status(404).send({ error: "Không tìm thấy Section" });
       }
 
       return section;
@@ -54,19 +60,15 @@ const sectionsRoutes: FastifyPluginAsync = async (fastify) => {
     "/",
     { preHandler: [authenticate, requireRoles("admin", "teacher")] },
     async (request, reply) => {
-      const validation = createSectionSchema.safeParse(request.body);
-
-      if (!validation.success) {
-        return reply
-          .status(400)
-          .send({
-            error: "Validation failed",
-            details: validation.error.flatten().fieldErrors,
-          });
-      }
+      const data = handleValidation(
+        createSectionSchema.safeParse(request.body),
+        request,
+        reply,
+      );
+      if (!data) return;
 
       const section = await fastify.prisma.examSection.create({
-        data: validation.data as any,
+        data,
       });
 
       return reply.status(201).send(section);

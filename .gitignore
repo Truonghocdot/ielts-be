@@ -29,3 +29,7 @@ prisma/migrations/*_migration.sql
 
 # Test
 coverage/
+.cursor/
+.env
+package-lock.json
+.uploads/

@@ -3,7 +3,7 @@ import { authenticate } from "../middlewares/auth.middleware.js";
 
 const enrollmentsRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /enrollments - Get user enrollments
-  fastify.get("/", { preHandler: authenticate }, async (request, reply) => {
+  fastify.get("/", { preHandler: authenticate }, async (request) => {
     const user = request.user;
 
     const enrollments = await fastify.prisma.enrollment.findMany({
@@ -22,13 +22,61 @@ const enrollmentsRoutes: FastifyPluginAsync = async (fastify) => {
     return enrollments;
   });
 
-  // POST /enrollments - Enroll in a course
+  // GET /enrollments/course/:courseId - Get enrollments of a specific course (for admin)
+  fastify.get<{ Params: { courseId: string } }>(
+    "/course/:courseId",
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const { courseId } = request.params;
+      const user = request.user;
+
+      const isAdminOrTeacher =
+        user.roles.includes("admin") || user.roles.includes("teacher");
+
+      if (!isAdminOrTeacher) {
+        return reply.status(403).send({ error: "Từ chối truy cập" });
+      }
+
+      const enrollments = await fastify.prisma.enrollment.findMany({
+        where: { courseId },
+        include: {
+          student: {
+            select: {
+              id: true,
+              email: true,
+              fullName: true,
+              avatarUrl: true,
+            },
+          },
+        },
+        orderBy: { enrolledAt: "desc" },
+      });
+
+      return { data: enrollments };
+    },
+  );
+
+  // POST /enrollments - Enroll in a course (self-enroll or admin add student)
   fastify.post("/", { preHandler: authenticate }, async (request, reply) => {
-    const { courseId } = request.body as any;
+    const { courseId, studentId } = request.body as {
+      courseId?: string;
+      studentId?: string;
+    };
     const user = request.user;
 
     if (!courseId) {
       return reply.status(400).send({ error: "Yêu cầu courseId" });
+    }
+
+    // Determine target student
+    let targetStudentId = user.id;
+    if (studentId) {
+      const isAdminOrTeacher =
+        user.roles.includes("admin") || user.roles.includes("teacher");
+      if (!isAdminOrTeacher) {
+        return reply.status(403).send({ error: "Từ chối truy cập" });
+      }
+      targetStudentId = studentId;
     }
 
     // Check course exists and is published
@@ -51,7 +99,7 @@ const enrollmentsRoutes: FastifyPluginAsync = async (fastify) => {
       where: {
         courseId_studentId: {
           courseId,
-          studentId: user.id,
+          studentId: targetStudentId,
         },
       },
     });
@@ -63,10 +111,18 @@ const enrollmentsRoutes: FastifyPluginAsync = async (fastify) => {
     const enrollment = await fastify.prisma.enrollment.create({
       data: {
         courseId,
-        studentId: user.id,
+        studentId: targetStudentId,
       },
       include: {
         course: true,
+        student: {
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            avatarUrl: true,
+          },
+        },
       },
     });
 

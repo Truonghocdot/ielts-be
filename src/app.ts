@@ -10,7 +10,11 @@ import authPlugin from "./plugins/auth.js";
 import routes from "./routes/index.js";
 
 export async function buildApp() {
-  const logFile = join(process.cwd(), "logs/app.log");
+  const logDir = join(process.cwd(), "logs");
+  if (!existsSync(logDir)) {
+    mkdirSync(logDir, { recursive: true });
+  }
+  const logFile = join(logDir, "app.log");
   const app = Fastify({
     logger: {
       level: env.NODE_ENV === "production" ? "info" : "debug",

@@ -3,7 +3,7 @@ import { z } from "zod";
 export const createCourseSchema = z.object({
   title: z.string().min(1, "Tiêu đề là bắt buộc"),
   description: z.string().optional().nullable(),
-  thumbnailUrl: z.string().min(1, "URL ảnh không hợp lệ").optional().nullable(),
+  thumbnailUrl: z.string().optional().nullable(),
   level: z
     .enum(["beginner", "intermediate", "advanced"], {
       errorMap: () => ({ message: "Cấp độ không hợp lệ" }),

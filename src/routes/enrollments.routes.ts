@@ -19,7 +19,7 @@ const enrollmentsRoutes: FastifyPluginAsync = async (fastify) => {
       orderBy: { enrolledAt: "desc" },
     });
 
-    return enrollments;
+    return { data: enrollments };
   });
 
   // GET /enrollments/course/:courseId - Get enrollments of a specific course (for admin)

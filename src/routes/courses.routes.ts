@@ -20,6 +20,7 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
 
     const { page, limit, search, sortBy = "createdAt", sortOrder } = query.data;
     const skip = (page - 1) * limit;
+    const { level } = request.query as any;
 
     const where: any = {};
 
@@ -32,6 +33,10 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (search) {
       where.title = { contains: search };
+    }
+
+    if (level && level !== "all") {
+      where.level = level;
     }
 
     const [data, total] = await Promise.all([

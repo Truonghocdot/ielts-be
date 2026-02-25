@@ -120,11 +120,15 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Auto-create 5 default sections
       const defaultSections = [
-        { sectionType: "listening", title: "Listening", orderIndex: 0 },
-        { sectionType: "reading", title: "Reading", orderIndex: 1 },
-        { sectionType: "writing", title: "Writing", orderIndex: 2 },
-        { sectionType: "speaking", title: "Speaking", orderIndex: 3 },
-        { sectionType: "general", title: "Grammar", orderIndex: 4 },
+        {
+          sectionType: "listening" as const,
+          title: "Listening",
+          orderIndex: 0,
+        },
+        { sectionType: "reading" as const, title: "Reading", orderIndex: 1 },
+        { sectionType: "writing" as const, title: "Writing", orderIndex: 2 },
+        { sectionType: "speaking" as const, title: "Speaking", orderIndex: 3 },
+        { sectionType: "general" as const, title: "Grammar", orderIndex: 4 },
       ];
 
       await fastify.prisma.examSection.createMany({

@@ -3,6 +3,7 @@ import { paginationSchema } from "../schemas/common.schema.js";
 import { createExamSchema, updateExamSchema } from "../schemas/exam.schema.js";
 import { authenticate, requireRoles } from "../middlewares/auth.middleware.js";
 import { handleValidation } from "../utils/validation.js";
+import { toFileUrl } from "../utils/file.js";
 
 const examsRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /exams - List all exams
@@ -80,7 +81,16 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: "Không tìm thấy bài thi" });
       }
 
-      return exam;
+      // Format lại liên kết file trong các section
+      const formattedSections = exam.sections.map((section) => ({
+        ...section,
+        audioUrl: toFileUrl(section.audioUrl),
+      }));
+
+      return {
+        ...exam,
+        sections: formattedSections,
+      };
     },
   );
 

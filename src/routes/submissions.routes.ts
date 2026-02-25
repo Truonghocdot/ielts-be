@@ -3,6 +3,7 @@ import { z } from "zod";
 import { paginationSchema } from "../schemas/common.schema.js";
 import { authenticate, requireRoles } from "../middlewares/auth.middleware.js";
 import { handleValidation } from "../utils/validation.js";
+import { toFileUrl } from "../utils/file.js";
 
 const submissionStatusEnum = z.enum(["in_progress", "submitted", "graded"], {
   errorMap: () => ({ message: "Trạng thái bài nộp không hợp lệ" }),
@@ -106,7 +107,26 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(403).send({ error: "Từ chối truy cập" });
       }
 
-      return submission;
+      // Format audioUrl in answers
+      const formattedAnswers = submission.answers.map((answer) => ({
+        ...answer,
+        audioUrl: toFileUrl(answer.audioUrl),
+      }));
+
+      // Format audioUrl in sections as well
+      const formattedSections = submission.exam.sections.map((section) => ({
+        ...section,
+        audioUrl: toFileUrl(section.audioUrl),
+      }));
+
+      return {
+        ...submission,
+        exam: {
+          ...submission.exam,
+          sections: formattedSections,
+        },
+        answers: formattedAnswers,
+      };
     },
   );
 
@@ -274,7 +294,15 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
-      return updated;
+      const formattedAnswers = updated.answers.map((answer) => ({
+        ...answer,
+        audioUrl: toFileUrl(answer.audioUrl),
+      }));
+
+      return {
+        ...updated,
+        answers: formattedAnswers,
+      };
     },
   );
 };

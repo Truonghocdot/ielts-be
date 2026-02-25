@@ -24,6 +24,8 @@ model User {
   submissions       ExamSubmission[] @relation("StudentSubmissions")
   highlights        Highlight[]
   roles             UserRole[]
+  classesAsTeacher  Class[]          @relation("TeacherClasses")
+  classesAsStudent  ClassStudent[]
 
   @@map("users")
 }
@@ -140,6 +142,7 @@ model Question {
   points        Int?          @default(1)
   orderIndex    Int?          @default(0) @map("order_index")
   createdAt     DateTime      @default(now()) @map("created_at")
+  audioUrl      String?       @map("audio_url") @db.Text
   answers       Answer[]
   group         QuestionGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
@@ -203,6 +206,36 @@ model Highlight {
   @@map("highlights")
 }
 
+model Class {
+  id          String   @id @default(uuid())
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  teacherId   String?  @map("teacher_id")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  teacher  User?          @relation("TeacherClasses", fields: [teacherId], references: [id])
+  students ClassStudent[]
+
+  @@index([teacherId], map: "classes_teacher_id_fkey")
+  @@map("classes")
+}
+
+model ClassStudent {
+  id        String   @id @default(uuid())
+  classId   String   @map("class_id")
+  studentId String   @map("student_id")
+  joinedAt  DateTime @default(now()) @map("joined_at")
+
+  class   Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student User  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, studentId])
+  @@index([studentId], map: "class_students_student_id_fkey")
+  @@map("class_students")
+}
+
 enum AppRole {
   admin
   teacher
@@ -223,6 +256,7 @@ enum QuestionType {
   matching
   essay
   speaking
+  listening
   short_answer
   true_false_not_given
   yes_no_not_given

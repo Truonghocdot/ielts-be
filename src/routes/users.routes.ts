@@ -3,6 +3,7 @@ import { paginationSchema } from "../schemas/common.schema.js";
 import { authenticate, requireRoles } from "../middlewares/auth.middleware.js";
 import { hashPassword } from "../utils/password.js";
 import { handleValidation } from "../utils/validation.js";
+import { withFileUrls, withFileUrlsMany } from "../utils/file.js";
 
 const usersRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /users - List users (admin/teacher only)
@@ -65,11 +66,13 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.prisma.user.count({ where }),
       ]);
 
+      const users = data.map((u) => ({
+        ...u,
+        roles: u.roles.map((r) => r.role),
+      }));
+
       return {
-        data: data.map((u) => ({
-          ...u,
-          roles: u.roles.map((r) => r.role),
-        })),
+        data: withFileUrlsMany(users, ["avatarUrl"]),
         meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
       };
     },
@@ -103,10 +106,12 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: "Không tìm thấy người dùng" });
       }
 
-      return {
+      const userWithRoles = {
         ...user,
         roles: user.roles.map((r) => r.role),
       };
+
+      return withFileUrls(userWithRoles, ["avatarUrl"]);
     },
   );
 

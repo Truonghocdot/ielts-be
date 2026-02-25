@@ -11,6 +11,7 @@ import { OAuth2Client } from "google-auth-library";
 import { hashPassword, verifyPassword } from "../utils/password.js";
 import { authenticate } from "../middlewares/auth.middleware.js";
 import { handleValidation } from "../utils/validation.js";
+import { toFileUrl } from "../utils/file.js";
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /auth/register
@@ -61,7 +62,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         id: user.id,
         email: user.email,
         fullName: user.fullName,
-        avatarUrl: user.avatarUrl,
+        avatarUrl: toFileUrl(user.avatarUrl),
         roles: user.roles.map((r) => r.role),
       },
     };
@@ -116,7 +117,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         id: user.id,
         email: user.email,
         fullName: user.fullName,
-        avatarUrl: user.avatarUrl,
+        avatarUrl: toFileUrl(user.avatarUrl),
         roles: user.roles.map((r) => r.role),
       },
     };
@@ -214,7 +215,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           id: user.id,
           email: user.email,
           fullName: user.fullName,
-          avatarUrl: user.avatarUrl,
+          avatarUrl: toFileUrl(user.avatarUrl),
           roles: user.roles.map((r) => r.role),
         },
       };
@@ -238,7 +239,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       id: user.id,
       email: user.email,
       fullName: user.fullName,
-      avatarUrl: user.avatarUrl,
+      avatarUrl: toFileUrl(user.avatarUrl),
       bio: user.bio,
       roles: user.roles.map((r) => r.role),
     };
@@ -266,7 +267,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         id: user.id,
         email: user.email,
         fullName: user.fullName,
-        avatarUrl: user.avatarUrl,
+        avatarUrl: toFileUrl(user.avatarUrl),
         bio: user.bio,
         roles: user.roles.map((r) => r.role),
       };

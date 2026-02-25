@@ -6,6 +6,7 @@ const envSchema = z.object({
     .enum(["development", "production", "test"])
     .default("development"),
   PORT: z.string().default("3000"),
+  APP_URL: z.string().optional(), // Full URL của server, VD: https://api.yourdomain.com
   DATABASE_URL: z.string(),
   JWT_SECRET: z.string(),
   JWT_EXPIRES_IN: z.string().default("7d"),

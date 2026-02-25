@@ -10,6 +10,7 @@ const questionTypeEnum = z.enum(
     "matching",
     "essay",
     "speaking",
+    "listening",
     "short_answer",
     "true_false_not_given",
     "yes_no_not_given",
@@ -35,6 +36,7 @@ const createQuestionSchema = z.object({
   questionText: z.string().min(1, "Nội dung câu hỏi là bắt buộc"),
   options: z.any().optional(),
   correctAnswer: z.string().optional(),
+  audioUrl: z.string().optional(),
   points: z.number({ invalid_type_error: "Điểm phải là số" }).int().default(1),
   orderIndex: z.number().int().default(0),
 });

@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { authenticate, requireRoles } from "../middlewares/auth.middleware.js";
 import { handleValidation } from "../utils/validation.js";
+import { toFileUrl, withFileUrls } from "../utils/file.js";
 
 const sectionTypeEnum = z.enum(
   ["listening", "reading", "writing", "speaking", "general"],
@@ -51,7 +52,7 @@ const sectionsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: "Không tìm thấy Section" });
       }
 
-      return section;
+      return withFileUrls(section, ["audioUrl"]);
     },
   );
 
@@ -71,7 +72,7 @@ const sectionsRoutes: FastifyPluginAsync = async (fastify) => {
         data,
       });
 
-      return reply.status(201).send(section);
+      return reply.status(201).send(withFileUrls(section, ["audioUrl"]));
     },
   );
 
@@ -88,7 +89,7 @@ const sectionsRoutes: FastifyPluginAsync = async (fastify) => {
         data,
       });
 
-      return section;
+      return withFileUrls(section, ["audioUrl"]);
     },
   );
 

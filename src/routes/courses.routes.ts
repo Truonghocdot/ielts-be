@@ -8,6 +8,7 @@ import {
 } from "../schemas/course.schema.js";
 import { authenticate, requireRoles } from "../middlewares/auth.middleware.js";
 import { handleValidation } from "../utils/validation.js";
+import { toFileUrl, withFileUrls } from "../utils/file.js";
 
 const coursesRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /courses - List all courses (public)
@@ -57,8 +58,19 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.prisma.course.count({ where }),
     ]);
 
+    const courses = data.map((c) => ({
+      ...c,
+      thumbnailUrl: toFileUrl(c.thumbnailUrl),
+      teacher: c.teacher
+        ? {
+            ...c.teacher,
+            avatarUrl: toFileUrl(c.teacher.avatarUrl),
+          }
+        : null,
+    }));
+
     return {
-      data,
+      data: courses,
       meta: {
         total,
         page,
@@ -89,7 +101,16 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(404).send({ error: "Không tìm thấy khóa học" });
     }
 
-    return course;
+    return {
+      ...course,
+      thumbnailUrl: toFileUrl(course.thumbnailUrl),
+      teacher: course.teacher
+        ? {
+            ...course.teacher,
+            avatarUrl: toFileUrl(course.teacher.avatarUrl),
+          }
+        : null,
+    };
   });
 
   // GET /courses/slug/:slug - Get course by slug
@@ -115,7 +136,16 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: "Course not found" });
       }
 
-      return course;
+      return {
+        ...course,
+        thumbnailUrl: toFileUrl(course.thumbnailUrl),
+        teacher: course.teacher
+          ? {
+              ...course.teacher,
+              avatarUrl: toFileUrl(course.teacher.avatarUrl),
+            }
+          : null,
+      };
     },
   );
 
@@ -149,7 +179,7 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
-      return reply.status(201).send(course);
+      return reply.status(201).send(withFileUrls(course, ["thumbnailUrl"]));
     },
   );
 
@@ -180,7 +210,7 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
         data,
       });
 
-      return course;
+      return withFileUrls(course, ["thumbnailUrl"]);
     },
   );
 

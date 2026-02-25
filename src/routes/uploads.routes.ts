@@ -5,6 +5,7 @@ import { pipeline } from "stream/promises";
 import { randomUUID } from "crypto";
 import { authenticate } from "../middlewares/auth.middleware.js";
 import { env } from "../config/env.js";
+import { toFileUrl } from "../utils/file.js";
 
 // Allowed file types
 const ALLOWED_IMAGE_TYPES = [
@@ -74,11 +75,11 @@ const uploadsRoutes: FastifyPluginAsync = async (fastify) => {
         // Save file
         await pipeline(data.file, createWriteStream(filePath));
 
-        // Generate URL
-        const url = `/uploads/${subDir}/${fileName}`;
+        // Generate URL (full URL để FE dùng trực tiếp)
+        const relativePath = `/uploads/${subDir}/${fileName}`;
 
         return {
-          url,
+          url: toFileUrl(relativePath),
           fileName,
           mimeType: data.mimetype,
           size: data.file.bytesRead,
@@ -118,7 +119,7 @@ const uploadsRoutes: FastifyPluginAsync = async (fastify) => {
         await pipeline(data.file, createWriteStream(filePath));
 
         return {
-          url: `/uploads/images/${fileName}`,
+          url: toFileUrl(`/uploads/images/${fileName}`),
           fileName,
           mimeType: data.mimetype,
         };
@@ -157,7 +158,7 @@ const uploadsRoutes: FastifyPluginAsync = async (fastify) => {
         await pipeline(data.file, createWriteStream(filePath));
 
         return {
-          url: `/uploads/audio/${fileName}`,
+          url: toFileUrl(`/uploads/audio/${fileName}`),
           fileName,
           mimeType: data.mimetype,
         };

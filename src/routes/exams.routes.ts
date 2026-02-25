@@ -9,7 +9,7 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /exams - List all exams
   fastify.get("/", { preHandler: authenticate }, async (request, reply) => {
     const query = paginationSchema.safeParse(request.query);
-    const { courseId } = request.query as any;
+    const { courseId, isPublished, isActive } = request.query as any;
 
     if (!query.success) {
       return reply.status(400).send({ error: "Tham số truy vấn không hợp lệ" });
@@ -22,6 +22,14 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (courseId) {
       where.courseId = courseId;
+    }
+
+    if (isPublished !== undefined) {
+      where.isPublished = isPublished === "true";
+    }
+
+    if (isActive !== undefined) {
+      where.isActive = isActive === "true";
     }
 
     if (search) {
@@ -110,7 +118,31 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
         data,
       });
 
-      return reply.status(201).send(exam);
+      // Auto-create 5 default sections
+      const defaultSections = [
+        { sectionType: "listening", title: "Listening", orderIndex: 0 },
+        { sectionType: "reading", title: "Reading", orderIndex: 1 },
+        { sectionType: "writing", title: "Writing", orderIndex: 2 },
+        { sectionType: "speaking", title: "Speaking", orderIndex: 3 },
+        { sectionType: "general", title: "Grammar", orderIndex: 4 },
+      ];
+
+      await fastify.prisma.examSection.createMany({
+        data: defaultSections.map((s) => ({
+          examId: exam.id,
+          ...s,
+        })),
+      });
+
+      // Return exam with sections
+      const examWithSections = await fastify.prisma.exam.findUnique({
+        where: { id: exam.id },
+        include: {
+          sections: { orderBy: { orderIndex: "asc" } },
+        },
+      });
+
+      return reply.status(201).send(examWithSections);
     },
   );
 

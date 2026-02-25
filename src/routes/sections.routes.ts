@@ -56,23 +56,15 @@ const sectionsRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
-  // POST /sections
+  // POST /sections - BLOCKED (sections are auto-created with exam)
   fastify.post(
     "/",
     { preHandler: [authenticate, requireRoles("admin", "teacher")] },
     async (request, reply) => {
-      const data = handleValidation(
-        createSectionSchema.safeParse(request.body),
-        request,
-        reply,
-      );
-      if (!data) return;
-
-      const section = await fastify.prisma.examSection.create({
-        data,
+      return reply.status(403).send({
+        error:
+          "Không thể tạo section thủ công. Sections được tạo tự động khi tạo bài thi.",
       });
-
-      return reply.status(201).send(withFileUrls(section, ["audioUrl"]));
     },
   );
 
@@ -93,14 +85,14 @@ const sectionsRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
-  // DELETE /sections/:id
+  // DELETE /sections/:id - BLOCKED (sections cannot be deleted)
   fastify.delete<{ Params: { id: string } }>(
     "/:id",
     { preHandler: [authenticate, requireRoles("admin")] },
     async (request, reply) => {
-      const { id } = request.params;
-      await fastify.prisma.examSection.delete({ where: { id } });
-      return { success: true };
+      return reply.status(403).send({
+        error: "Không thể xóa section. Mỗi bài thi luôn có đủ 5 sections.",
+      });
     },
   );
 };

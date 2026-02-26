@@ -33,3 +33,4 @@ coverage/
 .env
 package-lock.json
 .uploads/
+*.uploads/

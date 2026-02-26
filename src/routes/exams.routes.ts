@@ -89,10 +89,17 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: "Không tìm thấy bài thi" });
       }
 
-      // Format lại liên kết file trong các section
+      // Format lại liên kết file trong các section và question
       const formattedSections = exam.sections.map((section) => ({
         ...section,
         audioUrl: toFileUrl(section.audioUrl),
+        questionGroups: section.questionGroups.map((group) => ({
+          ...group,
+          questions: group.questions.map((question) => ({
+            ...question,
+            audioUrl: toFileUrl(question.audioUrl),
+          })),
+        })),
       }));
 
       return {

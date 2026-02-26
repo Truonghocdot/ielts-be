@@ -228,12 +228,72 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
       // Submit if requested
       if (submit) {
         await fastify.prisma.examSubmission.update({
-          where: { id },
+          where: { id: id },
           data: {
             status: "submitted",
             submittedAt: new Date(),
           },
         });
+
+        // Tự động cập nhật tiến độ enrollment
+        try {
+          const exam = await fastify.prisma.exam.findUnique({
+            where: { id: submission.examId },
+            select: { courseId: true },
+          });
+
+          if (exam) {
+
+            const enrollment = await fastify.prisma.enrollment.findFirst({
+              where: {
+                courseId: exam.courseId,
+                studentId: user.id,
+              },
+            });
+
+            if (enrollment) {
+              // 1. Đếm tổng số bài thi đang có trong khóa (Published & Active)
+              const totalExams = await fastify.prisma.exam.count({
+                where: {
+                  courseId: exam.courseId,
+                  isPublished: true,
+                  isActive: true,
+                },
+              });
+
+              // 2. Lấy danh sách các ExamId DUY NHẤT mà user này đã nộp trong khóa này
+              const uniqueSubmissions = await fastify.prisma.examSubmission.groupBy({
+                by: ['examId'],
+                where: {
+                  studentId: user.id,
+                  status: { in: ["submitted", "graded"] },
+                  exam: {
+                    courseId: exam.courseId,
+                    isPublished: true,
+                    isActive: true,
+                  }
+                },
+              });
+
+              const completedExamsCount = uniqueSubmissions.length;
+              const progressPercent = totalExams > 0
+                ? Math.round((completedExamsCount / totalExams) * 100)
+                : 0;
+
+
+              // 3. Cập nhật vào DB
+              await fastify.prisma.enrollment.update({
+                where: { id: enrollment.id },
+                data: { progressPercent },
+              });
+
+            } else {
+              console.warn(`[Progress] No enrollment found for course ${exam.courseId}`);
+            }
+          }
+        } catch (progressError) {
+          console.error("[Progress] CRITICAL ERROR:", progressError);
+        }
       }
 
       return fastify.prisma.examSubmission.findUnique({

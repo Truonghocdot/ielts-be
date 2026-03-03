@@ -48,7 +48,7 @@ model Course {
   thumbnailUrl String?      @map("thumbnail_url") @db.Text
   level        String       @default("beginner") @db.VarChar(50)
   teacherId    String?      @map("teacher_id")
-  price        Decimal      @default(0.00) @db.Decimal(10, 2)
+  price        Decimal?     @default(0.00) @db.Decimal(10, 2)
   isPublished  Boolean      @default(false) @map("is_published")
   isActive     Boolean      @default(true) @map("is_active")
   syllabus     Json?

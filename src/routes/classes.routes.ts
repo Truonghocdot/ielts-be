@@ -7,12 +7,16 @@ const createClassSchema = z.object({
   name: z.string().min(1, "Tên lớp là bắt buộc"),
   description: z.string().optional(),
   teacherId: z.string().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
 });
 
 const updateClassSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional(),
   teacherId: z.string().nullable().optional(),
+  startDate: z.string().nullable().optional(),
+  endDate: z.string().nullable().optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -136,13 +140,15 @@ const classesRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const { name, description, teacherId } = parsed.data;
+      const { name, description, teacherId, startDate, endDate } = parsed.data;
 
       const classData = await fastify.prisma.class.create({
         data: {
           name,
           description,
           teacherId: teacherId || (request.user as any).id,
+          startDate: startDate ? new Date(startDate) : undefined,
+          endDate: endDate ? new Date(endDate) : undefined,
         },
         include: {
           teacher: {
@@ -176,9 +182,21 @@ const classesRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: "Không tìm thấy lớp học" });
       }
 
+      const updateData: any = { ...parsed.data };
+      if (updateData.startDate !== undefined) {
+        updateData.startDate = updateData.startDate
+          ? new Date(updateData.startDate)
+          : null;
+      }
+      if (updateData.endDate !== undefined) {
+        updateData.endDate = updateData.endDate
+          ? new Date(updateData.endDate)
+          : null;
+      }
+
       const classData = await fastify.prisma.class.update({
         where: { id },
-        data: parsed.data,
+        data: updateData,
         include: {
           teacher: {
             select: { id: true, fullName: true, email: true },

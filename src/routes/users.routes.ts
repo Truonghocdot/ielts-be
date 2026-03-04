@@ -55,6 +55,11 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
             email: true,
             fullName: true,
             avatarUrl: true,
+            gender: true,
+            dateOfBirth: true,
+            phone: true,
+            parentName: true,
+            parentPhone: true,
             isActive: true,
             createdAt: true,
             roles: true,
@@ -125,6 +130,11 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
         password,
         fullName,
         role = "student",
+        gender,
+        dateOfBirth,
+        phone,
+        parentName,
+        parentPhone,
       } = request.body as any;
 
       if (!email || !password) {
@@ -146,6 +156,11 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
           email,
           password: hashedPassword,
           fullName,
+          gender,
+          dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
+          phone,
+          parentName,
+          parentPhone,
           roles: {
             create: { role },
           },
@@ -168,13 +183,29 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [authenticate, requireRoles("admin")] },
     async (request, reply) => {
       const { id } = request.params;
-      const { fullName, isActive, role } = request.body as any;
+      const {
+        fullName,
+        isActive,
+        role,
+        gender,
+        dateOfBirth,
+        phone,
+        parentName,
+        parentPhone,
+      } = request.body as any;
 
       const user = await fastify.prisma.user.update({
         where: { id },
         data: {
           ...(fullName !== undefined && { fullName }),
           ...(isActive !== undefined && { isActive }),
+          ...(gender !== undefined && { gender }),
+          ...(dateOfBirth !== undefined && {
+            dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+          }),
+          ...(phone !== undefined && { phone }),
+          ...(parentName !== undefined && { parentName }),
+          ...(parentPhone !== undefined && { parentPhone }),
         },
         include: { roles: true },
       });

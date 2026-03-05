@@ -20,6 +20,14 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
 
     const where: any = {};
 
+    // Teacher: only see exams from courses they teach
+    const user = request.user;
+    const isAdmin = user.roles.includes("admin");
+    const isTeacher = user.roles.includes("teacher");
+    if (isTeacher && !isAdmin) {
+      where.course = { teacherId: user.id };
+    }
+
     if (courseId) {
       where.courseId = courseId;
     }

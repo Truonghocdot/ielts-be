@@ -4,6 +4,10 @@ import { paginationSchema } from "../schemas/common.schema.js";
 import { authenticate, requireRoles } from "../middlewares/auth.middleware.js";
 import { handleValidation } from "../utils/validation.js";
 import { toFileUrl } from "../utils/file.js";
+import {
+  getTeacherStudentIds,
+  isStudentInTeacherClasses,
+} from "../utils/teacherScope.js";
 
 const submissionStatusEnum = z.enum(["in_progress", "submitted", "graded"], {
   errorMap: () => ({ message: "Trạng thái bài nộp không hợp lệ" }),
@@ -26,12 +30,28 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
 
     const where: any = {};
 
-    // Non-admin users can only see their own submissions
-    const isAdminOrTeacher =
-      user.roles.includes("admin") || user.roles.includes("teacher");
-    if (!isAdminOrTeacher) {
+    // Role-based filtering
+    const isAdmin = user.roles.includes("admin");
+    const isTeacher = user.roles.includes("teacher");
+
+    if (!isAdmin && !isTeacher) {
+      // Students only see their own submissions
       where.studentId = user.id;
+    } else if (isTeacher && !isAdmin) {
+      // Teacher: only see submissions from students in their classes
+      const teacherStudentIds = await getTeacherStudentIds(
+        fastify.prisma,
+        user.id,
+      );
+      where.studentId = { in: teacherStudentIds };
+      if (studentId) {
+        // Further filter by specific student if requested
+        where.studentId = teacherStudentIds.includes(studentId)
+          ? studentId
+          : "__none__";
+      }
     } else if (studentId) {
+      // Admin with student filter
       where.studentId = studentId;
     }
 
@@ -101,9 +121,25 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Check access permission
-      const isAdminOrTeacher =
-        user.roles.includes("admin") || user.roles.includes("teacher");
-      if (!isAdminOrTeacher && submission.studentId !== user.id) {
+      const isAdmin = user.roles.includes("admin");
+      const isTeacher = user.roles.includes("teacher");
+
+      if (isTeacher && !isAdmin) {
+        // Teacher: check if student belongs to their classes
+        const hasAccess = await isStudentInTeacherClasses(
+          fastify.prisma,
+          user.id,
+          submission.studentId,
+        );
+        if (!hasAccess) {
+          return reply
+            .status(403)
+            .send({
+              error:
+                "Từ chối truy cập - học sinh không thuộc lớp bạn phụ trách",
+            });
+        }
+      } else if (!isAdmin && submission.studentId !== user.id) {
         return reply.status(403).send({ error: "Từ chối truy cập" });
       }
 
@@ -243,7 +279,6 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
           });
 
           if (exam) {
-
             const enrollment = await fastify.prisma.enrollment.findFirst({
               where: {
                 courseId: exam.courseId,
@@ -262,33 +297,35 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
               });
 
               // 2. Lấy danh sách các ExamId DUY NHẤT mà user này đã nộp trong khóa này
-              const uniqueSubmissions = await fastify.prisma.examSubmission.groupBy({
-                by: ['examId'],
-                where: {
-                  studentId: user.id,
-                  status: { in: ["submitted", "graded"] },
-                  exam: {
-                    courseId: exam.courseId,
-                    isPublished: true,
-                    isActive: true,
-                  }
-                },
-              });
+              const uniqueSubmissions =
+                await fastify.prisma.examSubmission.groupBy({
+                  by: ["examId"],
+                  where: {
+                    studentId: user.id,
+                    status: { in: ["submitted", "graded"] },
+                    exam: {
+                      courseId: exam.courseId,
+                      isPublished: true,
+                      isActive: true,
+                    },
+                  },
+                });
 
               const completedExamsCount = uniqueSubmissions.length;
-              const progressPercent = totalExams > 0
-                ? Math.round((completedExamsCount / totalExams) * 100)
-                : 0;
-
+              const progressPercent =
+                totalExams > 0
+                  ? Math.round((completedExamsCount / totalExams) * 100)
+                  : 0;
 
               // 3. Cập nhật vào DB
               await fastify.prisma.enrollment.update({
                 where: { id: enrollment.id },
                 data: { progressPercent },
               });
-
             } else {
-              console.warn(`[Progress] No enrollment found for course ${exam.courseId}`);
+              console.warn(
+                `[Progress] No enrollment found for course ${exam.courseId}`,
+              );
             }
           }
         } catch (progressError) {
@@ -318,6 +355,25 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!submission) {
         return reply.status(404).send({ error: "Không tìm thấy bài nộp" });
+      }
+
+      // Teacher: check if student belongs to their classes
+      const isAdmin = user.roles.includes("admin");
+      const isTeacher = user.roles.includes("teacher");
+      if (isTeacher && !isAdmin) {
+        const hasAccess = await isStudentInTeacherClasses(
+          fastify.prisma,
+          user.id,
+          submission.studentId,
+        );
+        if (!hasAccess) {
+          return reply
+            .status(403)
+            .send({
+              error:
+                "Từ chối truy cập - học sinh không thuộc lớp bạn phụ trách",
+            });
+        }
       }
 
       if (submission.status === "in_progress") {

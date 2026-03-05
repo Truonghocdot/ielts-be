@@ -4,6 +4,10 @@ import { authenticate, requireRoles } from "../middlewares/auth.middleware.js";
 import { hashPassword } from "../utils/password.js";
 import { handleValidation } from "../utils/validation.js";
 import { withFileUrls, withFileUrlsMany } from "../utils/file.js";
+import {
+  getTeacherStudentIds,
+  isStudentInTeacherClasses,
+} from "../utils/teacherScope.js";
 
 const usersRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /users - List users (admin/teacher only)
@@ -30,6 +34,19 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
       const skip = (page - 1) * limit;
 
       const where: any = {};
+
+      // Teacher: only see students in their classes
+      const user = request.user;
+      const isAdmin = user.roles.includes("admin");
+      const isTeacher = user.roles.includes("teacher");
+
+      if (isTeacher && !isAdmin) {
+        const teacherStudentIds = await getTeacherStudentIds(
+          fastify.prisma,
+          user.id,
+        );
+        where.id = { in: teacherStudentIds };
+      }
 
       if (search) {
         where.OR = [
@@ -109,6 +126,26 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!user) {
         return reply.status(404).send({ error: "Không tìm thấy người dùng" });
+      }
+
+      // Teacher: check if this user is a student in their classes
+      const currentUser = request.user;
+      const isCurrentAdmin = currentUser.roles.includes("admin");
+      const isCurrentTeacher = currentUser.roles.includes("teacher");
+      if (isCurrentTeacher && !isCurrentAdmin) {
+        const hasAccess = await isStudentInTeacherClasses(
+          fastify.prisma,
+          currentUser.id,
+          id,
+        );
+        if (!hasAccess) {
+          return reply
+            .status(403)
+            .send({
+              error:
+                "Từ chối truy cập - người dùng không thuộc lớp bạn phụ trách",
+            });
+        }
       }
 
       const userWithRoles = {

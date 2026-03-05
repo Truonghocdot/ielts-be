@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { authenticate, requireRoles } from "../middlewares/auth.middleware.js";
 import { paginationSchema } from "../schemas/common.schema.js";
+import { isTeacherOfClass } from "../utils/teacherScope.js";
 
 const createClassSchema = z.object({
   name: z.string().min(1, "Tên lớp là bắt buộc"),
@@ -123,6 +124,19 @@ const classesRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: "Không tìm thấy lớp học" });
       }
 
+      // Teacher: verify ownership
+      const userRoles = (request.user as any).roles || [];
+      const isAdmin = userRoles.some(
+        (r: any) => r.role === "admin" || r === "admin",
+      );
+      if (!isAdmin && classData.teacherId !== (request.user as any).id) {
+        return reply
+          .status(403)
+          .send({
+            error: "Từ chối truy cập - lớp không thuộc quyền quản lý của bạn",
+          });
+      }
+
       return classData;
     },
   );
@@ -180,6 +194,19 @@ const classesRoutes: FastifyPluginAsync = async (fastify) => {
       });
       if (!existing) {
         return reply.status(404).send({ error: "Không tìm thấy lớp học" });
+      }
+
+      // Teacher: verify ownership
+      const userRoles = (request.user as any).roles || [];
+      const isAdmin = userRoles.some(
+        (r: any) => r.role === "admin" || r === "admin",
+      );
+      if (!isAdmin && existing.teacherId !== (request.user as any).id) {
+        return reply
+          .status(403)
+          .send({
+            error: "Từ chối truy cập - lớp không thuộc quyền quản lý của bạn",
+          });
       }
 
       const updateData: any = { ...parsed.data };
@@ -241,6 +268,15 @@ const classesRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: "Không tìm thấy lớp học" });
       }
 
+      // Teacher: verify ownership
+      const userRoles = (request.user as any).roles || [];
+      const isAdmin = userRoles.some(
+        (r: any) => r.role === "admin" || r === "admin",
+      );
+      if (!isAdmin && existing.teacherId !== (request.user as any).id) {
+        return reply.status(403).send({ error: "Từ chối truy cập" });
+      }
+
       const { studentIds } = parsed.data;
 
       // Dùng createMany với skipDuplicates để tránh lỗi unique
@@ -262,6 +298,20 @@ const classesRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [authenticate, requireRoles("admin", "teacher")] },
     async (request, reply) => {
       const { id, studentId } = request.params;
+
+      // Teacher: verify ownership
+      const userRoles = (request.user as any).roles || [];
+      const isAdmin = userRoles.some(
+        (r: any) => r.role === "admin" || r === "admin",
+      );
+      if (!isAdmin) {
+        const classData = await fastify.prisma.class.findUnique({
+          where: { id },
+        });
+        if (!classData || classData.teacherId !== (request.user as any).id) {
+          return reply.status(403).send({ error: "Từ chối truy cập" });
+        }
+      }
 
       await fastify.prisma.classStudent.deleteMany({
         where: {

@@ -40,9 +40,11 @@ const sectionsRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id },
         include: {
           questionGroups: {
-            orderBy: { orderIndex: "asc" },
+            orderBy: [{ orderIndex: "asc" }, { createdAt: "asc" }],
             include: {
-              questions: { orderBy: { orderIndex: "asc" } },
+              questions: {
+                orderBy: [{ orderIndex: "asc" }, { createdAt: "asc" }],
+              },
             },
           },
         },

@@ -128,6 +128,7 @@ model QuestionGroup {
   title        String?     @db.VarChar(255)
   instructions String?     @db.Text
   passage      String?     @db.LongText
+  audioUrl     String?     @map("audio_url") @db.Text
   orderIndex   Int?        @default(0) @map("order_index")
   createdAt    DateTime    @default(now()) @map("created_at")
   section      ExamSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)

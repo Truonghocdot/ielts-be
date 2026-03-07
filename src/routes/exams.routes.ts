@@ -103,6 +103,7 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
         audioUrl: toFileUrl(section.audioUrl),
         questionGroups: section.questionGroups.map((group) => ({
           ...group,
+          audioUrl: toFileUrl(group.audioUrl),
           questions: group.questions.map((question) => ({
             ...question,
             audioUrl: toFileUrl(question.audioUrl),

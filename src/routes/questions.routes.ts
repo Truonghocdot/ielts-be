@@ -27,6 +27,7 @@ const createQuestionGroupSchema = z.object({
   title: z.string().optional(),
   instructions: z.string().optional(),
   passage: z.string().optional(),
+  audioUrl: z.string().optional(),
   orderIndex: z.number().int().default(0),
 });
 

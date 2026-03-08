@@ -25,11 +25,43 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
 
     const where: any = {};
 
-    // Only show published courses for public
-    const isAuthenticated = request.headers.authorization;
-    if (!isAuthenticated) {
-      where.isPublished = true;
-      where.isActive = true;
+    let currentUser: any = null;
+    const authHeader = request.headers.authorization;
+    if (authHeader) {
+      try {
+        await request.jwtVerify();
+        currentUser = request.user;
+      } catch (err) {
+        // Token invalid/expired, treat as guest
+      }
+    }
+
+    // Role-based visibility
+    if (!currentUser) {
+      // Guest: force empty result by returning early
+      return {
+        data: [],
+        meta: {
+          total: 0,
+          page,
+          limit,
+          totalPages: 0,
+        },
+      };
+    } else {
+      const hasAdminOrTeacherRole = currentUser.roles?.some((r: string) =>
+        ["admin", "teacher"].includes(r),
+      );
+
+      if (!hasAdminOrTeacherRole) {
+        // Student: only show enrolled courses
+        where.enrollments = { some: { studentId: currentUser.id } };
+        where.isPublished = true;
+        where.isActive = true;
+      } else {
+        // Admin or Teacher: keep defaults (no enrollment filter)
+        // Adjust if they should only see active/published by default
+      }
     }
 
     if (search) {

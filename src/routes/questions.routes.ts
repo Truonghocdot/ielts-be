@@ -163,6 +163,7 @@ const questionsRoutes: FastifyPluginAsync = async (fastify) => {
           questionText: q.questionText,
           options: q.options,
           correctAnswer: q.correctAnswer,
+          audioUrl: q.audioUrl,
           points: q.points || 1,
           orderIndex: q.orderIndex ?? index,
         })),

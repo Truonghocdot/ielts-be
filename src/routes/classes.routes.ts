@@ -10,6 +10,7 @@ const createClassSchema = z.object({
   teacherId: z.string().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
+  isActive: z.boolean().optional().default(true),
 });
 
 const updateClassSchema = z.object({
@@ -154,7 +155,7 @@ const classesRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const { name, description, teacherId, startDate, endDate } = parsed.data;
+      const { name, description, teacherId, startDate, endDate, isActive } = parsed.data;
 
       const classData = await fastify.prisma.class.create({
         data: {
@@ -163,6 +164,7 @@ const classesRoutes: FastifyPluginAsync = async (fastify) => {
           teacherId: teacherId || (request.user as any).id,
           startDate: startDate ? new Date(startDate) : undefined,
           endDate: endDate ? new Date(endDate) : undefined,
+          isActive,
         },
         include: {
           teacher: {

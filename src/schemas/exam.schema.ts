@@ -11,12 +11,11 @@ export const createExamSchema = z.object({
     .min(1, "Thời gian thi phải ít nhất là 1 phút")
     .default(60),
   examType: z.string().default("ielts"),
+  isPublished: z.boolean().optional().default(false),
+  isActive: z.boolean().optional().default(true),
 });
 
-export const updateExamSchema = createExamSchema.partial().extend({
-  isPublished: z.boolean().optional(),
-  isActive: z.boolean().optional(),
-});
+export const updateExamSchema = createExamSchema.partial();
 
 export type CreateExamInput = z.infer<typeof createExamSchema>;
 export type UpdateExamInput = z.infer<typeof updateExamSchema>;

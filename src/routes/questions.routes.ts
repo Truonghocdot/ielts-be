@@ -42,6 +42,9 @@ const createQuestionSchema = z.object({
   orderIndex: z.number().int().default(0),
 });
 
+const updateQuestionGroupSchema = createQuestionGroupSchema.partial();
+const updateQuestionSchema = createQuestionSchema.partial();
+
 const questionsRoutes: FastifyPluginAsync = async (fastify) => {
   // ============ Question Groups ============
 
@@ -71,7 +74,12 @@ const questionsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [authenticate, requireRoles("admin", "teacher")] },
     async (request, reply) => {
       const { id } = request.params;
-      const data = request.body as any;
+      const data = handleValidation(
+        updateQuestionGroupSchema.safeParse(request.body),
+        request,
+        reply,
+      );
+      if (!data) return;
 
       const group = await fastify.prisma.questionGroup.update({
         where: { id },
@@ -121,7 +129,12 @@ const questionsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [authenticate, requireRoles("admin", "teacher")] },
     async (request, reply) => {
       const { id } = request.params;
-      const data = request.body as any;
+      const data = handleValidation(
+        updateQuestionSchema.safeParse(request.body),
+        request,
+        reply,
+      );
+      if (!data) return;
 
       const question = await fastify.prisma.question.update({
         where: { id },

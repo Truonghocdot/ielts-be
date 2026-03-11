@@ -263,11 +263,120 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Submit if requested
       if (submit) {
+        // === Auto-grading logic ===
+        let correctAnswers = 0;
+        let totalQuestions = 0;
+
+        try {
+          // Get all questions from the exam
+          const examWithQuestions = await fastify.prisma.exam.findUnique({
+            where: { id: submission.examId },
+            include: {
+              sections: {
+                include: {
+                  questionGroups: {
+                    include: {
+                      questions: true,
+                    },
+                  },
+                },
+              },
+            },
+          });
+
+          if (examWithQuestions) {
+            const allQuestions = examWithQuestions.sections.flatMap((s) =>
+              s.questionGroups.flatMap((g) => g.questions)
+            );
+            totalQuestions = allQuestions.length;
+
+            // Get all submitted answers for this submission
+            const submittedAnswers = await fastify.prisma.answer.findMany({
+              where: { submissionId: id },
+            });
+            const answerMap = new Map(
+              submittedAnswers.map((a) => [a.questionId, a.answerText])
+            );
+
+            // Auto-gradable question types
+            const autoGradableTypes = [
+              "multiple_choice",
+              "true_false_not_given",
+              "yes_no_not_given",
+              "short_answer",
+              "fill_blank",
+              "listening",
+            ];
+
+            for (const question of allQuestions) {
+              if (
+                !autoGradableTypes.includes(question.questionType) ||
+                !question.correctAnswer
+              ) {
+                continue;
+              }
+
+              const studentAnswer = answerMap.get(question.id);
+              if (!studentAnswer) continue;
+
+              const correctAnswer = question.correctAnswer.trim();
+
+              // Handle fill_blank with multiple blanks (JSON format)
+              if (question.questionType === "fill_blank") {
+                try {
+                  const parsedStudent = JSON.parse(studentAnswer);
+                  const parsedCorrect = JSON.parse(correctAnswer);
+
+                  if (
+                    typeof parsedStudent === "object" &&
+                    typeof parsedCorrect === "object" &&
+                    parsedStudent !== null &&
+                    parsedCorrect !== null
+                  ) {
+                    // Compare each blank: correct answer may have pipe-delimited alternatives
+                    let allCorrect = true;
+                    for (const key of Object.keys(parsedCorrect)) {
+                      const correctVal = String(parsedCorrect[key] || "").trim();
+                      const studentVal = String(
+                        parsedStudent[key] || ""
+                      ).trim();
+                      const alternatives = correctVal
+                        .split("|")
+                        .map((a: string) => a.trim().toLowerCase());
+                      if (!alternatives.includes(studentVal.toLowerCase())) {
+                        allCorrect = false;
+                        break;
+                      }
+                    }
+                    if (allCorrect) correctAnswers++;
+                    continue;
+                  }
+                } catch {
+                  // Not JSON, fall through to string comparison
+                }
+              }
+
+              // Simple string comparison (case-insensitive, trimmed)
+              // Support pipe-delimited alternatives in correctAnswer
+              const alternatives = correctAnswer
+                .split("|")
+                .map((a: string) => a.trim().toLowerCase());
+              if (alternatives.includes(studentAnswer.trim().toLowerCase())) {
+                correctAnswers++;
+              }
+            }
+          }
+        } catch (gradingError) {
+          console.error("[AutoGrade] Error:", gradingError);
+        }
+
         await fastify.prisma.examSubmission.update({
           where: { id: id },
           data: {
             status: "submitted",
             submittedAt: new Date(),
+            correctAnswers,
+            totalQuestions,
           },
         });
 

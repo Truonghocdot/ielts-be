@@ -65,7 +65,7 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
         take: limit,
         orderBy: { [sortBy]: sortOrder },
         include: {
-          exam: { select: { id: true, title: true, examType: true } },
+          exam: { select: { id: true, title: true, examType: true, course: { select: { id: true, title: true } } } },
           student: { select: { id: true, fullName: true, email: true } },
           grader: { select: { id: true, fullName: true } },
           _count: { select: { answers: true } },
@@ -349,6 +349,15 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
                       }
                     }
                     if (allCorrect) correctAnswers++;
+
+                    // Set score on the individual answer record
+                    const answerRecord = submittedAnswers.find(a => a.questionId === question.id);
+                    if (answerRecord) {
+                      await fastify.prisma.answer.update({
+                        where: { id: answerRecord.id },
+                        data: { score: allCorrect ? (question.points || 1) : 0 },
+                      });
+                    }
                     continue;
                   }
                 } catch {
@@ -356,13 +365,22 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
                 }
               }
 
-              // Simple string comparison (case-insensitive, trimmed)
               // Support pipe-delimited alternatives in correctAnswer
               const alternatives = correctAnswer
                 .split("|")
                 .map((a: string) => a.trim().toLowerCase());
-              if (alternatives.includes(studentAnswer.trim().toLowerCase())) {
+              const isCorrect = alternatives.includes(studentAnswer.trim().toLowerCase());
+              if (isCorrect) {
                 correctAnswers++;
+              }
+
+              // Set score on the individual answer record
+              const answerRecord = submittedAnswers.find(a => a.questionId === question.id);
+              if (answerRecord) {
+                await fastify.prisma.answer.update({
+                  where: { id: answerRecord.id },
+                  data: { score: isCorrect ? (question.points || 1) : 0 },
+                });
               }
             }
           }

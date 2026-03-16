@@ -306,6 +306,7 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
               "short_answer",
               "fill_blank",
               "listening",
+              "matching",
             ];
 
             for (const question of allQuestions) {
@@ -362,6 +363,57 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
                     if (answerRecord) {
                       const totalPoints = question.points || 1;
                       const partialScore = (correctBlanks / blankCount) * totalPoints;
+                      await fastify.prisma.answer.update({
+                        where: { id: answerRecord.id },
+                        data: { score: partialScore },
+                      });
+                    }
+                    continue;
+                  }
+                } catch {
+                  // Not JSON, fall through to string comparison
+                }
+              }
+
+              // Handle matching with JSON answers
+              if (question.questionType === "matching") {
+                try {
+                  const parsedStudent = JSON.parse(studentAnswer);
+                  const parsedCorrect = JSON.parse(correctAnswer);
+
+                  if (
+                    typeof parsedStudent === "object" &&
+                    typeof parsedCorrect === "object" &&
+                    parsedStudent !== null &&
+                    parsedCorrect !== null &&
+                    parsedCorrect.pairs
+                  ) {
+                    const keys = Object.keys(parsedCorrect.pairs);
+                    const pairsCount = keys.length;
+                    
+                    if (pairsCount === 0) continue;
+
+                    let correctPairs = 0;
+
+                    for (const key of keys) {
+                      const correctVal = String(parsedCorrect.pairs[key] || "").trim();
+                      const studentVal = String(parsedStudent[key] || "").trim();
+                        
+                      if (correctVal === studentVal) {
+                        correctPairs++;
+                      }
+                    }
+
+                    // Add the number of pairs minus 1 to the total questions, 
+                    // since the question itself was already counted as 1.
+                    totalQuestions += (pairsCount - 1);
+                    correctAnswers += correctPairs;
+
+                    // Set fractional score based on correct pairs
+                    const answerRecord = submittedAnswers.find(a => a.questionId === question.id);
+                    if (answerRecord) {
+                      const totalPoints = question.points || 1;
+                      const partialScore = (correctPairs / pairsCount) * totalPoints;
                       await fastify.prisma.answer.update({
                         where: { id: answerRecord.id },
                         data: { score: partialScore },

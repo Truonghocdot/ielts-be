@@ -174,8 +174,8 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
         parentPhone,
       } = request.body as any;
 
-      if (!email || !password) {
-        return reply.status(400).send({ error: "Yêu cầu email và mật khẩu" });
+      if (!email) {
+        return reply.status(400).send({ error: "Yêu cầu email" });
       }
 
       const existing = await fastify.prisma.user.findUnique({
@@ -186,7 +186,9 @@ const usersRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(409).send({ error: "Email đã tồn tại" });
       }
 
-      const hashedPassword = await hashPassword(password);
+      // Generate a random 16-character string if no password is provided
+      const finalPassword = password || Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
+      const hashedPassword = await hashPassword(finalPassword);
 
       const user = await fastify.prisma.user.create({
         data: {

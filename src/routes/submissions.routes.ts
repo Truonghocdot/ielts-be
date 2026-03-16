@@ -333,29 +333,38 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
                     parsedStudent !== null &&
                     parsedCorrect !== null
                   ) {
-                    // Compare each blank: correct answer may have pipe-delimited alternatives
-                    let allCorrect = true;
-                    for (const key of Object.keys(parsedCorrect)) {
+                    const keys = Object.keys(parsedCorrect);
+                    const blankCount = keys.length;
+                    
+                    if (blankCount === 0) continue;
+
+                    let correctBlanks = 0;
+
+                    for (const key of keys) {
                       const correctVal = String(parsedCorrect[key] || "").trim();
-                      const studentVal = String(
-                        parsedStudent[key] || ""
-                      ).trim();
+                      const studentVal = String(parsedStudent[key] || "").trim();
                       const alternatives = correctVal
                         .split("|")
                         .map((a: string) => a.trim().toLowerCase());
-                      if (!alternatives.includes(studentVal.toLowerCase())) {
-                        allCorrect = false;
-                        break;
+                        
+                      if (alternatives.includes(studentVal.toLowerCase())) {
+                        correctBlanks++;
                       }
                     }
-                    if (allCorrect) correctAnswers++;
 
-                    // Set score on the individual answer record
+                    // Add the number of blanks minus 1 to the total questions, 
+                    // since the question itself was already counted as 1.
+                    totalQuestions += (blankCount - 1);
+                    correctAnswers += correctBlanks;
+
+                    // Set fractional score based on correct blanks
                     const answerRecord = submittedAnswers.find(a => a.questionId === question.id);
                     if (answerRecord) {
+                      const totalPoints = question.points || 1;
+                      const partialScore = (correctBlanks / blankCount) * totalPoints;
                       await fastify.prisma.answer.update({
                         where: { id: answerRecord.id },
-                        data: { score: allCorrect ? (question.points || 1) : 0 },
+                        data: { score: partialScore },
                       });
                     }
                     continue;

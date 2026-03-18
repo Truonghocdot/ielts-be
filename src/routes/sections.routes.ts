@@ -29,6 +29,25 @@ const createSectionSchema = z.object({
 });
 
 const sectionsRoutes: FastifyPluginAsync = async (fastify) => {
+  // Helper to clean sensitive question data for students
+  const cleanQuestionData = (q: any, isAdminOrTeacher: boolean) => {
+    if (isAdminOrTeacher) return q;
+    const cleaned = { ...q };
+    if (q.questionType === "matching" && q.correctAnswer) {
+      try {
+        const config = JSON.parse(q.correctAnswer);
+        delete config.pairs; // Hide correct matching pairs
+        cleaned.correctAnswer = JSON.stringify(config);
+      } catch {
+        cleaned.correctAnswer = null;
+      }
+    } else {
+      // For all other types, hide the answer completely
+      cleaned.correctAnswer = null;
+    }
+    return cleaned;
+  };
+
   // GET /sections/:id
   fastify.get<{ Params: { id: string } }>(
     "/:id",
@@ -39,6 +58,7 @@ const sectionsRoutes: FastifyPluginAsync = async (fastify) => {
       const section = await fastify.prisma.examSection.findUnique({
         where: { id },
         include: {
+          exam: { select: { id: true, courseId: true, isPublished: true, isActive: true } },
           questionGroups: {
             orderBy: [{ orderIndex: "asc" }, { createdAt: "asc" }],
             include: {
@@ -54,7 +74,45 @@ const sectionsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: "Không tìm thấy Section" });
       }
 
-      return withFileUrls(section, ["audioUrl"]);
+      const user = request.user;
+      const isAdmin = user.roles.includes("admin");
+      const isTeacher = user.roles.includes("teacher");
+
+      // IDOR/Enrollment Check
+      if (!isAdmin && !isTeacher) {
+        const enrollment = await fastify.prisma.enrollment.findUnique({
+          where: {
+            courseId_studentId: {
+              courseId: section.exam.courseId,
+              studentId: user.id,
+            },
+          },
+        });
+
+        if (!enrollment) {
+          return reply.status(403).send({ error: "Bạn chưa đăng ký khóa học này" });
+        }
+      }
+
+      // Format audioUrls and Clean questions
+      const isAdminOrTeacher = isAdmin || isTeacher;
+      const formatted = {
+        ...section,
+        audioUrl: toFileUrl(section.audioUrl),
+        questionGroups: section.questionGroups.map((group: any) => ({
+          ...group,
+          audioUrl: toFileUrl(group.audioUrl),
+          questions: group.questions.map((q: any) => {
+            const fq = {
+              ...q,
+              audioUrl: toFileUrl(q.audioUrl),
+            };
+            return cleanQuestionData(fq, isAdminOrTeacher);
+          }),
+        })),
+      };
+
+      return formatted;
     },
   );
 

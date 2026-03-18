@@ -14,6 +14,23 @@ const submissionStatusEnum = z.enum(["in_progress", "submitted", "graded"], {
 });
 
 const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
+  const cleanQuestionData = (q: any, isAdminOrTeacher: boolean) => {
+    if (isAdminOrTeacher) return q;
+    const cleaned = { ...q };
+    if (q.questionType === "matching" && q.correctAnswer) {
+      try {
+        const config = JSON.parse(q.correctAnswer);
+        delete config.pairs;
+        cleaned.correctAnswer = JSON.stringify(config);
+      } catch {
+        cleaned.correctAnswer = null;
+      }
+    } else {
+      cleaned.correctAnswer = null;
+    }
+    return cleaned;
+  };
+
   // GET /submissions - List submissions (for current user or all for admin/teacher)
   fastify.get("/", { preHandler: authenticate }, async (request, reply) => {
     const dataQuery = handleValidation(
@@ -149,19 +166,40 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
         audioUrl: toFileUrl(answer.audioUrl),
       }));
 
-      // Format audioUrl in sections as well
-      const formattedSections = submission.exam.sections.map((section) => ({
-        ...section,
-        audioUrl: toFileUrl(section.audioUrl),
-      }));
+      // Format question data to hide answers if user is a student
+      const isAdminOrTeacher = isAdmin || isTeacher;
+
+      const formattedExam = {
+        ...submission.exam,
+        sections: submission.exam.sections.map((section: any) => ({
+          ...section,
+          audioUrl: toFileUrl(section.audioUrl),
+          questionGroups: section.questionGroups.map((group: any) => ({
+            ...group,
+            audioUrl: toFileUrl(group.audioUrl),
+            questions: group.questions.map((q: any) => {
+              const formatted = {
+                ...q,
+                audioUrl: toFileUrl(q.audioUrl),
+              };
+              return cleanQuestionData(formatted, isAdminOrTeacher);
+            }),
+          })),
+        })),
+      };
+
+      const formattedAnswersFinal = formattedAnswers.map((answer: any) => {
+        if (!answer.question) return answer;
+        return {
+          ...answer,
+          question: cleanQuestionData(answer.question, isAdminOrTeacher),
+        };
+      });
 
       return {
         ...submission,
-        exam: {
-          ...submission.exam,
-          sections: formattedSections,
-        },
-        answers: formattedAnswers,
+        exam: formattedExam,
+        answers: formattedAnswersFinal,
       };
     },
   );
@@ -186,6 +224,31 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (!exam.isPublished) {
       return reply.status(400).send({ error: "Bài thi chưa được xuất bản" });
+    }
+
+    // IDOR Check: Students must be enrolled in the course to start the exam
+    const isAdmin = user.roles.includes("admin");
+    const isTeacher = user.roles.includes("teacher");
+
+    if (!isAdmin && !isTeacher) {
+      const enrollment = await fastify.prisma.enrollment.findUnique({
+        where: {
+          courseId_studentId: {
+            courseId: exam.courseId,
+            studentId: user.id,
+          },
+        },
+      });
+
+      if (!enrollment) {
+        return reply
+          .status(403)
+          .send({ error: "Bạn chưa đăng ký khóa học này để bắt đầu bài thi" });
+      }
+
+      if (!exam.isActive) {
+        return reply.status(403).send({ error: "Bài thi hiện đang bị khóa" });
+      }
     }
 
     // Check if user already has an in-progress submission
@@ -336,7 +399,7 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
                   ) {
                     const keys = Object.keys(parsedCorrect);
                     const blankCount = keys.length;
-                    
+
                     if (blankCount === 0) continue;
 
                     let correctBlanks = 0;
@@ -347,7 +410,7 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
                       const alternatives = correctVal
                         .split("|")
                         .map((a: string) => a.trim().toLowerCase());
-                        
+
                       if (alternatives.includes(studentVal.toLowerCase())) {
                         correctBlanks++;
                       }
@@ -390,7 +453,7 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
                   ) {
                     const keys = Object.keys(parsedCorrect.pairs);
                     const pairsCount = keys.length;
-                    
+
                     if (pairsCount === 0) continue;
 
                     let correctPairs = 0;
@@ -398,7 +461,7 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
                     for (const key of keys) {
                       const correctVal = String(parsedCorrect.pairs[key] || "").trim();
                       const studentVal = String(parsedStudent[key] || "").trim();
-                        
+
                       if (correctVal === studentVal) {
                         correctPairs++;
                       }

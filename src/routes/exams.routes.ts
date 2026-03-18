@@ -6,6 +6,23 @@ import { handleValidation } from "../utils/validation.js";
 import { toFileUrl } from "../utils/file.js";
 
 const examsRoutes: FastifyPluginAsync = async (fastify) => {
+  const cleanQuestionData = (q: any, isAdminOrTeacher: boolean) => {
+    if (isAdminOrTeacher) return q;
+    const cleaned = { ...q };
+    if (q.questionType === "matching" && q.correctAnswer) {
+      try {
+        const config = JSON.parse(q.correctAnswer);
+        delete config.pairs;
+        cleaned.correctAnswer = JSON.stringify(config);
+      } catch {
+        cleaned.correctAnswer = null;
+      }
+    } else {
+      cleaned.correctAnswer = null;
+    }
+    return cleaned;
+  };
+
   // GET /exams - List all exams
   fastify.get("/", { preHandler: authenticate }, async (request, reply) => {
     const query = paginationSchema.safeParse(request.query);
@@ -24,8 +41,16 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
     const user = request.user;
     const isAdmin = user.roles.includes("admin");
     const isTeacher = user.roles.includes("teacher");
+
     if (isTeacher && !isAdmin) {
       where.course = { teacherId: user.id };
+    } else if (!isAdmin && !isTeacher) {
+      // Student: only see exams from courses they are enrolled in
+      where.course = {
+        enrollments: { some: { studentId: user.id } },
+      };
+      where.isPublished = true;
+      where.isActive = true;
     }
 
     if (courseId) {
@@ -97,6 +122,32 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: "Không tìm thấy bài thi" });
       }
 
+      const user = request.user;
+      const isAdmin = user.roles.includes("admin");
+      const isTeacher = user.roles.includes("teacher");
+
+      // IDOR Check
+      if (!isAdmin && !isTeacher) {
+        const enrollment = await fastify.prisma.enrollment.findUnique({
+          where: {
+            courseId_studentId: {
+              courseId: exam.courseId,
+              studentId: user.id,
+            },
+          },
+        });
+
+        if (!enrollment) {
+          return reply
+            .status(403)
+            .send({ error: "Bạn chưa đăng ký khóa học này để xem bài thi" });
+        }
+
+        if (!exam.isPublished || !exam.isActive) {
+          return reply.status(403).send({ error: "Bài thi hiện không còn khả dụng" });
+        }
+      }
+
       // Format lại liên kết file trong các section và question
       const formattedSections = exam.sections.map((section) => ({
         ...section,
@@ -104,10 +155,13 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
         questionGroups: section.questionGroups.map((group) => ({
           ...group,
           audioUrl: toFileUrl(group.audioUrl),
-          questions: group.questions.map((question) => ({
-            ...question,
-            audioUrl: toFileUrl(question.audioUrl),
-          })),
+          questions: group.questions.map((question) => {
+            const formatted = {
+              ...question,
+              audioUrl: toFileUrl(question.audioUrl),
+            };
+            return cleanQuestionData(formatted, isAdmin || isTeacher);
+          }),
         })),
       }));
 

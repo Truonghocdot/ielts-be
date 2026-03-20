@@ -149,9 +149,11 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Format lại liên kết file trong các section và question
+      const shouldShowTranscript = isAdmin || isTeacher;
       const formattedSections = exam.sections.map((section) => ({
         ...section,
         audioUrl: toFileUrl(section.audioUrl),
+        audioScript: shouldShowTranscript ? section.audioScript : undefined,
         questionGroups: section.questionGroups.map((group) => ({
           ...group,
           audioUrl: toFileUrl(group.audioUrl),

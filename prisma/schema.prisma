@@ -110,6 +110,7 @@ model ExamSection {
   instructions    String?         @db.Text
   content         Json?
   audioUrl        String?         @map("audio_url") @db.Text
+  audioScript     String?         @map("audio_script") @db.LongText
   durationMinutes Int?            @map("duration_minutes")
   orderIndex      Int?            @default(0) @map("order_index")
   createdAt       DateTime        @default(now()) @map("created_at")

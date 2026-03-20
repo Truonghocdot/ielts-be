@@ -169,11 +169,13 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
       // Format question data to hide answers if user is a student
       const isAdminOrTeacher = isAdmin || isTeacher;
 
+      const canShowTranscript = submission.status !== "in_progress";
       const formattedExam = {
         ...submission.exam,
         sections: submission.exam.sections.map((section: any) => ({
           ...section,
           audioUrl: toFileUrl(section.audioUrl),
+          audioScript: canShowTranscript ? section.audioScript : undefined,
           questionGroups: section.questionGroups.map((group: any) => ({
             ...group,
             audioUrl: toFileUrl(group.audioUrl),

@@ -21,6 +21,7 @@ const createSectionSchema = z.object({
   instructions: z.string().optional(),
   content: z.any().optional(),
   audioUrl: z.string().optional(),
+  audioScript: z.string().optional(),
   durationMinutes: z
     .number({ invalid_type_error: "Thời gian phải là số" })
     .int()
@@ -99,6 +100,7 @@ const sectionsRoutes: FastifyPluginAsync = async (fastify) => {
       const formatted = {
         ...section,
         audioUrl: toFileUrl(section.audioUrl),
+        audioScript: isAdminOrTeacher ? section.audioScript : undefined,
         questionGroups: section.questionGroups.map((group: any) => ({
           ...group,
           audioUrl: toFileUrl(group.audioUrl),

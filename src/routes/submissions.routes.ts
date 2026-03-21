@@ -228,28 +228,30 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ error: "Bài thi chưa được xuất bản" });
     }
 
-    // IDOR Check: Students must be enrolled in the course to start the exam
+    // IDOR Check: Students must be enrolled unless exam is open
     const isAdmin = user.roles.includes("admin");
     const isTeacher = user.roles.includes("teacher");
 
     if (!isAdmin && !isTeacher) {
-      const enrollment = await fastify.prisma.enrollment.findUnique({
-        where: {
-          courseId_studentId: {
-            courseId: exam.courseId,
-            studentId: user.id,
-          },
-        },
-      });
-
-      if (!enrollment) {
-        return reply
-          .status(403)
-          .send({ error: "Bạn chưa đăng ký khóa học này để bắt đầu bài thi" });
-      }
-
       if (!exam.isActive) {
         return reply.status(403).send({ error: "Bài thi hiện đang bị khóa" });
+      }
+
+      if (!exam.isOpen) {
+        const enrollment = await fastify.prisma.enrollment.findUnique({
+          where: {
+            courseId_studentId: {
+              courseId: exam.courseId,
+              studentId: user.id,
+            },
+          },
+        });
+
+        if (!enrollment) {
+          return reply
+            .status(403)
+            .send({ error: "Bạn chưa đăng ký khóa học này để bắt đầu bài thi" });
+        }
       }
     }
 
@@ -266,15 +268,66 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
       return existing; // Return existing in-progress submission
     }
 
-    const submission = await fastify.prisma.examSubmission.create({
-      data: {
+    // Open exam participant quota + refresh spam protection.
+    // Count a user only once per exam (first time they ever start/submit).
+    const hadAnySubmissionBefore = await fastify.prisma.examSubmission.findFirst({
+      where: {
         examId,
         studentId: user.id,
-        status: "in_progress",
       },
+      select: { id: true },
     });
 
-    return reply.status(201).send(submission);
+    try {
+      const submission = await fastify.prisma.$transaction(async (tx) => {
+        const inProgress = await tx.examSubmission.findFirst({
+          where: {
+            examId,
+            studentId: user.id,
+            status: "in_progress",
+          },
+        });
+        if (inProgress) return inProgress;
+
+        if (
+          exam.isOpen &&
+          exam.maxParticipants !== null &&
+          !hadAnySubmissionBefore
+        ) {
+          const updated = await tx.exam.updateMany({
+            where: {
+              id: exam.id,
+              currentParticipants: { lt: exam.maxParticipants },
+            },
+            data: {
+              currentParticipants: { increment: 1 },
+            },
+          });
+
+          if (updated.count === 0) {
+            throw new Error("OPEN_EXAM_FULL");
+          }
+        }
+
+        return tx.examSubmission.create({
+          data: {
+            examId,
+            studentId: user.id,
+            status: "in_progress",
+          },
+        });
+      });
+
+      return reply.status(201).send(submission);
+    } catch (error: any) {
+      if (error?.message === "OPEN_EXAM_FULL") {
+        return reply.status(409).send({
+          error: "Bài thi mở đã đạt giới hạn người tham gia",
+        });
+      }
+      throw error;
+    }
+
   });
 
   // PUT /submissions/:id - Update submission (submit answers)

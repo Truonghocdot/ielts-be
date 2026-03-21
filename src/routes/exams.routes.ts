@@ -45,10 +45,15 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
     if (isTeacher && !isAdmin) {
       where.course = { teacherId: user.id };
     } else if (!isAdmin && !isTeacher) {
-      // Student: only see exams from courses they are enrolled in
-      where.course = {
-        enrollments: { some: { studentId: user.id } },
-      };
+      // Student: see exams from enrolled courses OR open exams
+      where.OR = [
+        {
+          course: {
+            enrollments: { some: { studentId: user.id } },
+          },
+        },
+        { isOpen: true },
+      ];
       where.isPublished = true;
       where.isActive = true;
     }
@@ -138,9 +143,11 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
         });
 
         if (!enrollment) {
-          return reply
-            .status(403)
-            .send({ error: "Bạn chưa đăng ký khóa học này để xem bài thi" });
+          if (!exam.isOpen) {
+            return reply
+              .status(403)
+              .send({ error: "Bạn chưa đăng ký khóa học này để xem bài thi" });
+          }
         }
 
         if (!exam.isPublished || !exam.isActive) {

@@ -13,6 +13,8 @@ export const createExamSchema = z.object({
   examType: z.string().default("ielts"),
   isPublished: z.boolean().optional().default(false),
   isActive: z.boolean().optional().default(true),
+  isOpen: z.boolean().optional().default(false),
+  maxParticipants: z.number().int().positive().optional().nullable(),
 });
 
 export const updateExamSchema = createExamSchema.partial();

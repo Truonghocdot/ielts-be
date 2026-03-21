@@ -494,8 +494,48 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
               // Support pipe-delimited alternatives in correctAnswer
               const alternatives = correctAnswer
                 .split("|")
-                .map((a: string) => a.trim().toLowerCase());
-              const isCorrect = alternatives.includes(studentAnswer.trim().toLowerCase());
+                .map((a: string) => a.trim())
+                .filter(Boolean);
+
+              let isCorrect = false;
+              if (
+                (question.questionType === "multiple_choice" ||
+                  question.questionType === "listening") &&
+                alternatives.length > 1
+              ) {
+                // Multi-select MCQ/listening answers are stored as JSON arrays.
+                // Fallback to comma/pipe strings for backward compatibility.
+                let studentSelections: string[] = [];
+                try {
+                  const parsed = JSON.parse(studentAnswer);
+                  if (Array.isArray(parsed)) {
+                    studentSelections = parsed.map((v) => String(v).trim());
+                  }
+                } catch {
+                  studentSelections = studentAnswer
+                    .split("|")
+                    .flatMap((part) => part.split(","))
+                    .map((v) => v.trim())
+                    .filter(Boolean);
+                }
+
+                const normalizedStudent = Array.from(
+                  new Set(studentSelections.map((v) => v.toLowerCase())),
+                ).sort();
+                const normalizedCorrect = Array.from(
+                  new Set(alternatives.map((v) => v.toLowerCase())),
+                ).sort();
+                isCorrect =
+                  normalizedStudent.length === normalizedCorrect.length &&
+                  normalizedStudent.every(
+                    (item, idx) => item === normalizedCorrect[idx],
+                  );
+              } else {
+                isCorrect = alternatives
+                  .map((a) => a.toLowerCase())
+                  .includes(studentAnswer.trim().toLowerCase());
+              }
+
               if (isCorrect) {
                 correctAnswers++;
               }

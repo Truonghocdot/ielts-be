@@ -202,11 +202,15 @@ model Answer {
 model Highlight {
   id         String      @id @default(uuid())
   sectionId  String      @map("section_id")
+  passageId  String?     @map("passage_id")
   studentId  String      @map("student_id")
+  highlightText String?  @map("highlight_text") @db.Text
+  meaningOrNote String?  @map("meaning_or_note") @db.Text
   startIndex Int         @map("start_index")
   endIndex   Int         @map("end_index")
   color      String?     @default("yellow") @db.VarChar(50)
   createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
   section    ExamSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   student    User        @relation(fields: [studentId], references: [id], onDelete: Cascade)
 

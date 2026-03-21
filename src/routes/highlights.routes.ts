@@ -4,13 +4,17 @@ import { authenticate } from "../middlewares/auth.middleware.js";
 
 const createHighlightSchema = z.object({
   sectionId: z.string().min(1),
+  passageId: z.string().optional(),
+  highlightText: z.string().optional(),
+  meaningOrNote: z.string().optional(),
   startIndex: z.number().int().nonnegative(),
   endIndex: z.number().int().positive(),
   color: z.enum(["yellow", "green"]).optional(),
 });
 
 const updateHighlightSchema = z.object({
-  color: z.enum(["yellow", "green"]),
+  color: z.enum(["yellow", "green"]).optional(),
+  meaningOrNote: z.string().optional(),
 });
 
 const highlightsRoutes: FastifyPluginAsync = async (fastify) => {
@@ -48,7 +52,15 @@ const highlightsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ error: "Dữ liệu highlight không hợp lệ" });
     }
 
-    const { sectionId, startIndex, endIndex, color } = parsed.data;
+    const {
+      sectionId,
+      passageId,
+      highlightText,
+      meaningOrNote,
+      startIndex,
+      endIndex,
+      color,
+    } = parsed.data;
 
     if (endIndex <= startIndex) {
       return reply
@@ -59,7 +71,10 @@ const highlightsRoutes: FastifyPluginAsync = async (fastify) => {
     const highlight = await fastify.prisma.highlight.create({
       data: {
         sectionId,
+        passageId: passageId || null,
         studentId,
+        highlightText: highlightText || null,
+        meaningOrNote: meaningOrNote || null,
         startIndex,
         endIndex,
         color: color || "yellow",
@@ -81,6 +96,11 @@ const highlightsRoutes: FastifyPluginAsync = async (fastify) => {
       if (!parsed.success) {
         return reply.status(400).send({ error: "Dữ liệu cập nhật không hợp lệ" });
       }
+      if (!parsed.data.color && parsed.data.meaningOrNote === undefined) {
+        return reply
+          .status(400)
+          .send({ error: "Cần ít nhất 1 trường để cập nhật" });
+      }
 
       const existing = await fastify.prisma.highlight.findFirst({
         where: { id, studentId },
@@ -93,7 +113,12 @@ const highlightsRoutes: FastifyPluginAsync = async (fastify) => {
 
       const updated = await fastify.prisma.highlight.update({
         where: { id },
-        data: { color: parsed.data.color },
+        data: {
+          ...(parsed.data.color && { color: parsed.data.color }),
+          ...(parsed.data.meaningOrNote !== undefined && {
+            meaningOrNote: parsed.data.meaningOrNote,
+          }),
+        },
       });
 
       return updated;

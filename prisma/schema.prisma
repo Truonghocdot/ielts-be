@@ -208,7 +208,6 @@ model Highlight {
   passageId  String?     @map("passage_id")
   studentId  String      @map("student_id")
   highlightText String?  @map("highlight_text") @db.Text
-  meaningOrNote String?  @map("meaning_or_note") @db.Text
   startIndex Int         @map("start_index")
   endIndex   Int         @map("end_index")
   color      String?     @default("yellow") @db.VarChar(50)

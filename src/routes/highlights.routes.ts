@@ -6,7 +6,6 @@ const createHighlightSchema = z.object({
   sectionId: z.string().min(1),
   passageId: z.string().optional(),
   highlightText: z.string().optional(),
-  meaningOrNote: z.string().optional(),
   startIndex: z.number().int().nonnegative(),
   endIndex: z.number().int().positive(),
   color: z.enum(["yellow", "green"]).optional(),
@@ -14,7 +13,6 @@ const createHighlightSchema = z.object({
 
 const updateHighlightSchema = z.object({
   color: z.enum(["yellow", "green"]).optional(),
-  meaningOrNote: z.string().optional(),
 });
 
 const highlightsRoutes: FastifyPluginAsync = async (fastify) => {
@@ -56,7 +54,6 @@ const highlightsRoutes: FastifyPluginAsync = async (fastify) => {
       sectionId,
       passageId,
       highlightText,
-      meaningOrNote,
       startIndex,
       endIndex,
       color,
@@ -74,7 +71,6 @@ const highlightsRoutes: FastifyPluginAsync = async (fastify) => {
         passageId: passageId || null,
         studentId,
         highlightText: highlightText || null,
-        meaningOrNote: meaningOrNote || null,
         startIndex,
         endIndex,
         color: color || "yellow",
@@ -96,7 +92,7 @@ const highlightsRoutes: FastifyPluginAsync = async (fastify) => {
       if (!parsed.success) {
         return reply.status(400).send({ error: "Dữ liệu cập nhật không hợp lệ" });
       }
-      if (!parsed.data.color && parsed.data.meaningOrNote === undefined) {
+      if (!parsed.data.color) {
         return reply
           .status(400)
           .send({ error: "Cần ít nhất 1 trường để cập nhật" });
@@ -115,9 +111,6 @@ const highlightsRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id },
         data: {
           ...(parsed.data.color && { color: parsed.data.color }),
-          ...(parsed.data.meaningOrNote !== undefined && {
-            meaningOrNote: parsed.data.meaningOrNote,
-          }),
         },
       });
 

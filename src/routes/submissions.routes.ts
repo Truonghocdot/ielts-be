@@ -551,6 +551,9 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
                 .filter(Boolean);
 
               let isCorrect = false;
+              let questionScore = 0;
+              const questionPoints = question.points || 1;
+
               if (
                 (question.questionType === "multiple_choice" ||
                   question.questionType === "listening") &&
@@ -572,21 +575,28 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
                     .filter(Boolean);
                 }
 
-                const normalizedStudent = Array.from(
-                  new Set(studentSelections.map((v) => v.toLowerCase())),
-                ).sort();
-                const normalizedCorrect = Array.from(
-                  new Set(alternatives.map((v) => v.toLowerCase())),
-                ).sort();
-                isCorrect =
-                  normalizedStudent.length === normalizedCorrect.length &&
-                  normalizedStudent.every(
-                    (item, idx) => item === normalizedCorrect[idx],
-                  );
+                const normalizedStudent = studentSelections.map((v) => v.toLowerCase());
+                const normalizedCorrect = alternatives.map((v) => v.toLowerCase());
+
+                const correctHits = normalizedStudent.filter((v) =>
+                  normalizedCorrect.includes(v),
+                ).length;
+                const wrongSelections = normalizedStudent.filter(
+                  (v) => !normalizedCorrect.includes(v),
+                ).length;
+
+                // Partial scoring: (hits - wrong) / total_correct, min 0
+                const ratio = Math.max(
+                  0,
+                  (correctHits - wrongSelections) / normalizedCorrect.length,
+                );
+                questionScore = Math.round(ratio * questionPoints * 100) / 100;
+                isCorrect = questionScore >= questionPoints;
               } else {
                 isCorrect = alternatives
                   .map((a) => a.toLowerCase())
                   .includes(studentAnswer.trim().toLowerCase());
+                questionScore = isCorrect ? questionPoints : 0;
               }
 
               if (isCorrect) {
@@ -598,10 +608,11 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
               if (answerRecord) {
                 await fastify.prisma.answer.update({
                   where: { id: answerRecord.id },
-                  data: { score: isCorrect ? (question.points || 1) : 0 },
+                  data: { score: questionScore },
                 });
               }
             }
+
           }
         } catch (gradingError) {
           console.error("[AutoGrade] Error:", gradingError);

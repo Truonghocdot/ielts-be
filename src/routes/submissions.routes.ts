@@ -97,6 +97,40 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
     };
   });
 
+  // GET /submissions/latest/:examId - Latest completed submission for current user by exam
+  fastify.get<{ Params: { examId: string } }>(
+    "/latest/:examId",
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const { examId } = request.params;
+      const user = request.user;
+
+      if (!examId) {
+        return reply.status(400).send({ error: "Yêu cầu examId" });
+      }
+
+      const latestSubmission = await fastify.prisma.examSubmission.findFirst({
+        where: {
+          examId,
+          studentId: user.id,
+          status: { in: ["submitted", "graded"] },
+        },
+        orderBy: [{ submittedAt: "desc" }, { createdAt: "desc" }],
+        select: {
+          id: true,
+          examId: true,
+          status: true,
+          submittedAt: true,
+          totalScore: true,
+          correctAnswers: true,
+          totalQuestions: true,
+        },
+      });
+
+      return { data: latestSubmission ?? null };
+    },
+  );
+
   // GET /submissions/:id - Get submission with answers
   fastify.get<{ Params: { id: string } }>(
     "/:id",

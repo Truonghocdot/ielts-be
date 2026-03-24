@@ -23,6 +23,21 @@ export async function getTeacherStudentIds(
 }
 
 /**
+ * Lấy danh sách studentId thuộc 1 lớp cụ thể.
+ */
+export async function getClassStudentIds(
+  prisma: PrismaClient,
+  classId: string,
+): Promise<string[]> {
+  const classStudents = await prisma.classStudent.findMany({
+    where: { classId },
+    select: { studentId: true },
+  });
+
+  return [...new Set(classStudents.map((cs) => cs.studentId))];
+}
+
+/**
  * Kiểm tra xem teacher có phụ trách lớp có chứa student này không.
  */
 export async function isStudentInTeacherClasses(

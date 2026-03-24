@@ -5,8 +5,10 @@ import { authenticate, requireRoles } from "../middlewares/auth.middleware.js";
 import { handleValidation } from "../utils/validation.js";
 import { toFileUrl } from "../utils/file.js";
 import {
+  getClassStudentIds,
   getTeacherStudentIds,
   isStudentInTeacherClasses,
+  isTeacherOfClass,
 } from "../utils/teacherScope.js";
 
 const submissionStatusEnum = z.enum(["in_progress", "submitted", "graded"], {
@@ -40,7 +42,7 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
     );
     if (!dataQuery) return;
 
-    const { examId, studentId, status } = request.query as any;
+    const { examId, studentId, status, classId } = request.query as any;
     const { page, limit, sortBy = "createdAt", sortOrder } = dataQuery;
     const skip = (page - 1) * limit;
     const user = request.user;
@@ -56,11 +58,25 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
       where.studentId = user.id;
     } else if (isTeacher && !isAdmin) {
       // Teacher: only see submissions from students in their classes
-      const teacherStudentIds = await getTeacherStudentIds(
-        fastify.prisma,
-        user.id,
-      );
-      where.studentId = { in: teacherStudentIds };
+      let teacherStudentIds: string[] = [];
+
+      if (classId) {
+        const owned = await isTeacherOfClass(fastify.prisma, user.id, classId);
+        if (!owned) {
+          return reply
+            .status(403)
+            .send({
+              error: "Từ chối truy cập - lớp không thuộc quyền quản lý của bạn",
+            });
+        }
+        teacherStudentIds = await getClassStudentIds(fastify.prisma, classId);
+      } else {
+        teacherStudentIds = await getTeacherStudentIds(fastify.prisma, user.id);
+      }
+
+      where.studentId = {
+        in: teacherStudentIds.length > 0 ? teacherStudentIds : ["__none__"],
+      };
       if (studentId) {
         // Further filter by specific student if requested
         where.studentId = teacherStudentIds.includes(studentId)
@@ -70,6 +86,19 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
     } else if (studentId) {
       // Admin with student filter
       where.studentId = studentId;
+    }
+
+    if (isAdmin && classId) {
+      const classStudentIds = await getClassStudentIds(fastify.prisma, classId);
+      const inClass = classStudentIds.length > 0 ? classStudentIds : ["__none__"];
+
+      if (studentId) {
+        where.studentId = classStudentIds.includes(studentId)
+          ? studentId
+          : "__none__";
+      } else {
+        where.studentId = { in: inClass };
+      }
     }
 
     if (examId) where.examId = examId;
@@ -145,12 +174,14 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
           exam: {
             include: {
               sections: {
-                orderBy: { orderIndex: "asc" },
+                orderBy: [{ orderIndex: "asc" }, { createdAt: "asc" }],
                 include: {
                   questionGroups: {
-                    orderBy: { orderIndex: "asc" },
+                    orderBy: [{ orderIndex: "asc" }, { createdAt: "asc" }],
                     include: {
-                      questions: { orderBy: { orderIndex: "asc" } },
+                      questions: {
+                        orderBy: [{ orderIndex: "asc" }, { createdAt: "asc" }],
+                      },
                     },
                   },
                 },

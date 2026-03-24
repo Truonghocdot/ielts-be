@@ -116,6 +116,17 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { id: string } }>("/:id", async (request, reply) => {
     const { id } = request.params;
 
+    let currentUser: any = null;
+    const authHeader = request.headers.authorization;
+    if (authHeader) {
+      try {
+        await request.jwtVerify();
+        currentUser = request.user;
+      } catch (err) {
+        // Token invalid/expired, treat as guest
+      }
+    }
+
     const course = await fastify.prisma.course.findUnique({
       where: { id },
       include: {
@@ -131,6 +142,20 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (!course) {
       return reply.status(404).send({ error: "Không tìm thấy khóa học" });
+    }
+
+    if (!currentUser) {
+      return reply.status(404).send({ error: "Không tìm thấy khóa học" });
+    }
+
+    const hasAdminOrTeacherRole = currentUser.roles?.some((r: string) =>
+      ["admin", "teacher"].includes(r),
+    );
+
+    if (!hasAdminOrTeacherRole) {
+      if (!course.isActive || !course.isPublished) {
+        return reply.status(404).send({ error: "Không tìm thấy khóa học" });
+      }
     }
 
     return {
@@ -151,6 +176,17 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { slug } = request.params;
 
+      let currentUser: any = null;
+      const authHeader = request.headers.authorization;
+      if (authHeader) {
+        try {
+          await request.jwtVerify();
+          currentUser = request.user;
+        } catch (err) {
+          // Token invalid/expired, treat as guest
+        }
+      }
+
       const course = await fastify.prisma.course.findUnique({
         where: { slug },
         include: {
@@ -166,6 +202,20 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (!course) {
         return reply.status(404).send({ error: "Course not found" });
+      }
+
+      if (!currentUser) {
+        return reply.status(404).send({ error: "Course not found" });
+      }
+
+      const hasAdminOrTeacherRole = currentUser.roles?.some((r: string) =>
+        ["admin", "teacher"].includes(r),
+      );
+
+      if (!hasAdminOrTeacherRole) {
+        if (!course.isActive || !course.isPublished) {
+          return reply.status(404).send({ error: "Course not found" });
+        }
       }
 
       return {
@@ -275,11 +325,15 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      await fastify.prisma.course.delete({
+      await fastify.prisma.course.update({
         where: { id },
+        data: {
+          isActive: false,
+          isPublished: false,
+        },
       });
 
-      return { success: true };
+      return { success: true, softDeleted: true };
     },
   );
 };

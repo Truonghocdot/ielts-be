@@ -63,6 +63,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         email: user.email,
         fullName: user.fullName,
         avatarUrl: toFileUrl(user.avatarUrl),
+        phone: user.phone,
+        gender: user.gender,
         roles: user.roles.map((r) => r.role),
       },
     };
@@ -118,6 +120,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         email: user.email,
         fullName: user.fullName,
         avatarUrl: toFileUrl(user.avatarUrl),
+        phone: user.phone,
+        gender: user.gender,
         roles: user.roles.map((r) => r.role),
       },
     };
@@ -216,6 +220,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           email: user.email,
           fullName: user.fullName,
           avatarUrl: toFileUrl(user.avatarUrl),
+          phone: user.phone,
+          gender: user.gender,
           roles: user.roles.map((r) => r.role),
         },
       };
@@ -241,6 +247,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       fullName: user.fullName,
       avatarUrl: toFileUrl(user.avatarUrl),
       bio: user.bio,
+      phone: user.phone,
+      gender: user.gender,
       roles: user.roles.map((r) => r.role),
     };
   });
@@ -251,7 +259,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: authenticate },
     async (request, reply) => {
       const { id } = request.user;
-      const { fullName, bio, avatarUrl } = request.body as any;
+      const { fullName, bio, avatarUrl, phone, gender } = request.body as any;
 
       const user = await fastify.prisma.user.update({
         where: { id },
@@ -259,6 +267,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
           ...(fullName && { fullName }),
           ...(bio !== undefined && { bio }),
           ...(avatarUrl && { avatarUrl }),
+          ...(phone !== undefined && { phone }),
+          ...(gender !== undefined && { gender }),
         },
         include: { roles: true },
       });
@@ -269,6 +279,8 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         fullName: user.fullName,
         avatarUrl: toFileUrl(user.avatarUrl),
         bio: user.bio,
+        phone: user.phone,
+        gender: user.gender,
         roles: user.roles.map((r) => r.role),
       };
     },

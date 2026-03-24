@@ -155,7 +155,26 @@ const classesRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
 
-      const { name, description, teacherId, startDate, endDate, isActive } = parsed.data;
+      const {
+        name,
+        description,
+        teacherId,
+        startDate,
+        endDate,
+        isActive,
+      } = parsed.data;
+
+      if (startDate && endDate) {
+        const startTime = new Date(startDate).getTime();
+        const endTime = new Date(endDate).getTime();
+        if (Number.isFinite(startTime) && Number.isFinite(endTime)) {
+          if (startTime > endTime) {
+            return reply
+              .status(400)
+              .send({ error: "Ngày bắt đầu không được lớn hơn ngày kết thúc" });
+          }
+        }
+      }
 
       const classData = await fastify.prisma.class.create({
         data: {
@@ -221,6 +240,25 @@ const classesRoutes: FastifyPluginAsync = async (fastify) => {
         updateData.endDate = updateData.endDate
           ? new Date(updateData.endDate)
           : null;
+      }
+
+      const effectiveStart =
+        updateData.startDate !== undefined
+          ? updateData.startDate
+          : existing.startDate;
+      const effectiveEnd =
+        updateData.endDate !== undefined ? updateData.endDate : existing.endDate;
+
+      if (effectiveStart && effectiveEnd) {
+        const startTime = new Date(effectiveStart).getTime();
+        const endTime = new Date(effectiveEnd).getTime();
+        if (Number.isFinite(startTime) && Number.isFinite(endTime)) {
+          if (startTime > endTime) {
+            return reply
+              .status(400)
+              .send({ error: "Ngày bắt đầu không được lớn hơn ngày kết thúc" });
+          }
+        }
       }
 
       const classData = await fastify.prisma.class.update({

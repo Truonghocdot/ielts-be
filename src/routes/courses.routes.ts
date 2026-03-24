@@ -253,6 +253,28 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { id } = request.params;
 
+      const existing = await fastify.prisma.course.findUnique({
+        where: { id },
+        select: { id: true },
+      });
+      if (!existing) {
+        return reply.status(404).send({ error: "Không tìm thấy khóa học" });
+      }
+
+      const [enrollmentCount, submissionCount] = await Promise.all([
+        fastify.prisma.enrollment.count({ where: { courseId: id } }),
+        fastify.prisma.examSubmission.count({
+          where: { exam: { courseId: id } },
+        }),
+      ]);
+
+      if (enrollmentCount > 0 || submissionCount > 0) {
+        return reply.status(409).send({
+          error:
+            "Không thể xóa khóa học khi vẫn còn học viên hoặc bài nộp liên quan",
+        });
+      }
+
       await fastify.prisma.course.delete({
         where: { id },
       });

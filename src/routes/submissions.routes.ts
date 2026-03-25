@@ -15,6 +15,29 @@ const submissionStatusEnum = z.enum(["in_progress", "submitted", "graded"], {
   errorMap: () => ({ message: "Trạng thái bài nộp không hợp lệ" }),
 });
 
+const OBJECTIVE_TYPES = new Set([
+  "multiple_choice",
+  "true_false_not_given",
+  "yes_no_not_given",
+  "short_answer",
+  "fill_blank",
+  "listening",
+  "matching",
+]);
+
+const MANUAL_TYPES = new Set(["essay", "speaking"]);
+
+function getRemainingSeconds(startedAt: Date | null, durationMinutes: number | null) {
+  const safeDuration = Math.max(1, durationMinutes || 60);
+  if (!startedAt) return safeDuration * 60;
+
+  const startedMs = new Date(startedAt).getTime();
+  if (!Number.isFinite(startedMs)) return safeDuration * 60;
+
+  const elapsed = Math.floor((Date.now() - startedMs) / 1000);
+  return Math.max(0, safeDuration * 60 - Math.max(0, elapsed));
+}
+
 const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
   const cleanQuestionData = (q: any, isAdminOrTeacher: boolean) => {
     if (isAdminOrTeacher) return q;
@@ -330,7 +353,27 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     if (existing) {
-      return existing; // Return existing in-progress submission
+      const remainingSeconds = getRemainingSeconds(
+        existing.startedAt,
+        exam.durationMinutes,
+      );
+
+      if (remainingSeconds > 0) {
+        return {
+          ...existing,
+          remainingSeconds,
+          serverTime: new Date().toISOString(),
+        };
+      }
+
+      // Expired stale attempt: close it to avoid immediate auto-submit loop on client
+      await fastify.prisma.examSubmission.update({
+        where: { id: existing.id },
+        data: {
+          status: "submitted",
+          submittedAt: new Date(),
+        },
+      });
     }
 
     // Open exam participant quota + refresh spam protection.
@@ -352,7 +395,27 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
             status: "in_progress",
           },
         });
-        if (inProgress) return inProgress;
+        if (inProgress) {
+          const remainingSeconds = getRemainingSeconds(
+            inProgress.startedAt,
+            exam.durationMinutes,
+          );
+          if (remainingSeconds > 0) {
+            return {
+              ...inProgress,
+              remainingSeconds,
+              serverTime: new Date().toISOString(),
+            };
+          }
+
+          await tx.examSubmission.update({
+            where: { id: inProgress.id },
+            data: {
+              status: "submitted",
+              submittedAt: new Date(),
+            },
+          });
+        }
 
         if (
           exam.isOpen &&
@@ -374,13 +437,19 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
-        return tx.examSubmission.create({
+        const created = await tx.examSubmission.create({
           data: {
             examId,
             studentId: user.id,
             status: "in_progress",
           },
         });
+
+        return {
+          ...created,
+          remainingSeconds: Math.max(1, (exam.durationMinutes || 60) * 60),
+          serverTime: new Date().toISOString(),
+        };
       });
 
       return reply.status(201).send(submission);
@@ -449,6 +518,8 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
         // === Auto-grading logic ===
         let correctAnswers = 0;
         let totalQuestions = 0;
+        let objectiveScore = 0;
+        let hasManualQuestions = false;
 
         try {
           // Get all questions from the exam
@@ -471,7 +542,9 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
             const allQuestions = examWithQuestions.sections.flatMap((s) =>
               s.questionGroups.flatMap((g) => g.questions)
             );
-            totalQuestions = allQuestions.length;
+            hasManualQuestions = allQuestions.some((question) =>
+              MANUAL_TYPES.has(question.questionType),
+            );
 
             // Get all submitted answers for this submission
             const submittedAnswers = await fastify.prisma.answer.findMany({
@@ -481,24 +554,15 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
               submittedAnswers.map((a) => [a.questionId, a.answerText])
             );
 
-            // Auto-gradable question types
-            const autoGradableTypes = [
-              "multiple_choice",
-              "true_false_not_given",
-              "yes_no_not_given",
-              "short_answer",
-              "fill_blank",
-              "listening",
-              "matching",
-            ];
-
             for (const question of allQuestions) {
               if (
-                !autoGradableTypes.includes(question.questionType) ||
+                !OBJECTIVE_TYPES.has(question.questionType) ||
                 !question.correctAnswer
               ) {
                 continue;
               }
+
+              totalQuestions++;
 
               const studentAnswer = answerMap.get(question.id);
               if (!studentAnswer) continue;
@@ -540,12 +604,13 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
                     // since the question itself was already counted as 1.
                     totalQuestions += (blankCount - 1);
                     correctAnswers += correctBlanks;
+                    const totalPoints = question.points || 1;
+                    const partialScore = (correctBlanks / blankCount) * totalPoints;
+                    objectiveScore += partialScore;
 
                     // Set fractional score based on correct blanks
                     const answerRecord = submittedAnswers.find(a => a.questionId === question.id);
                     if (answerRecord) {
-                      const totalPoints = question.points || 1;
-                      const partialScore = (correctBlanks / blankCount) * totalPoints;
                       await fastify.prisma.answer.update({
                         where: { id: answerRecord.id },
                         data: { score: partialScore },
@@ -591,12 +656,13 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
                     // since the question itself was already counted as 1.
                     totalQuestions += (pairsCount - 1);
                     correctAnswers += correctPairs;
+                    const totalPoints = question.points || 1;
+                    const partialScore = (correctPairs / pairsCount) * totalPoints;
+                    objectiveScore += partialScore;
 
                     // Set fractional score based on correct pairs
                     const answerRecord = submittedAnswers.find(a => a.questionId === question.id);
                     if (answerRecord) {
-                      const totalPoints = question.points || 1;
-                      const partialScore = (correctPairs / pairsCount) * totalPoints;
                       await fastify.prisma.answer.update({
                         where: { id: answerRecord.id },
                         data: { score: partialScore },
@@ -668,6 +734,8 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
                 correctAnswers++;
               }
 
+              objectiveScore += questionScore;
+
               // Set score on the individual answer record
               const answerRecord = submittedAnswers.find(a => a.questionId === question.id);
               if (answerRecord) {
@@ -683,13 +751,18 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
           console.error("[AutoGrade] Error:", gradingError);
         }
 
+        const normalizedObjectiveScore = Math.round(objectiveScore * 100) / 100;
+        const finalStatus = hasManualQuestions ? "submitted" : "graded";
+
         await fastify.prisma.examSubmission.update({
           where: { id: id },
           data: {
-            status: "submitted",
+            status: finalStatus,
             submittedAt: new Date(),
             correctAnswers,
             totalQuestions,
+            totalScore: normalizedObjectiveScore,
+            ...(finalStatus === "graded" && { gradedAt: new Date() }),
           },
         });
 

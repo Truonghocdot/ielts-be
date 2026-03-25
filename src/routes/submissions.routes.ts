@@ -366,6 +366,21 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
         };
       }
 
+      const existingAnswerCount = await fastify.prisma.answer.count({
+        where: { submissionId: existing.id },
+      });
+      if (existingAnswerCount === 0) {
+        const resetSubmission = await fastify.prisma.examSubmission.update({
+          where: { id: existing.id },
+          data: { startedAt: new Date() },
+        });
+        return {
+          ...resetSubmission,
+          remainingSeconds: Math.max(1, (exam.durationMinutes || 60) * 60),
+          serverTime: new Date().toISOString(),
+        };
+      }
+
       // Expired stale attempt: close it to avoid immediate auto-submit loop on client
       await fastify.prisma.examSubmission.update({
         where: { id: existing.id },
@@ -408,6 +423,21 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
             };
           }
 
+          const inProgressAnswerCount = await tx.answer.count({
+            where: { submissionId: inProgress.id },
+          });
+          if (inProgressAnswerCount === 0) {
+            const resetSubmission = await tx.examSubmission.update({
+              where: { id: inProgress.id },
+              data: { startedAt: new Date() },
+            });
+            return {
+              ...resetSubmission,
+              remainingSeconds: Math.max(1, (exam.durationMinutes || 60) * 60),
+              serverTime: new Date().toISOString(),
+            };
+          }
+
           await tx.examSubmission.update({
             where: { id: inProgress.id },
             data: {
@@ -442,6 +472,7 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
             examId,
             studentId: user.id,
             status: "in_progress",
+            startedAt: new Date(),
           },
         });
 

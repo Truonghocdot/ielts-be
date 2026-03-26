@@ -9,6 +9,7 @@ import {
 import { authenticate, requireRoles } from "../middlewares/auth.middleware.js";
 import { handleValidation } from "../utils/validation.js";
 import { toFileUrl, withFileUrls } from "../utils/file.js";
+import { verifyPassword } from "../utils/password.js";
 
 const coursesRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /courses - List all courses (public)
@@ -287,6 +288,18 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: "Không tìm thấy khóa học" });
       }
 
+      if (existing.isLocked) {
+        const updateKeys = Object.keys(data);
+        const lockOnlyUpdate =
+          updateKeys.length > 0 && updateKeys.every((key) => key === "isLocked");
+
+        if (!lockOnlyUpdate) {
+          return reply.status(423).send({
+            error: "Khóa học đang bị khóa. Hãy mở khóa trước khi chỉnh sửa",
+          });
+        }
+      }
+
       const course = await fastify.prisma.course.update({
         where: { id },
         data,
@@ -302,13 +315,36 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [authenticate, requireRoles("admin")] },
     async (request, reply) => {
       const { id } = request.params;
+      const { password } = (request.body || {}) as { password?: string };
+
+      if (!password) {
+        return reply.status(400).send({ error: "Yêu cầu mật khẩu xác nhận" });
+      }
+
+      const actor = await fastify.prisma.user.findUnique({
+        where: { id: request.user.id },
+        select: { password: true },
+      });
+      if (!actor) {
+        return reply.status(401).send({ error: "Không thể xác thực người dùng" });
+      }
+
+      const validPassword = await verifyPassword(password, actor.password);
+      if (!validPassword) {
+        return reply.status(401).send({ error: "Mật khẩu xác nhận không đúng" });
+      }
 
       const existing = await fastify.prisma.course.findUnique({
         where: { id },
-        select: { id: true },
+        select: { id: true, isLocked: true },
       });
       if (!existing) {
         return reply.status(404).send({ error: "Không tìm thấy khóa học" });
+      }
+      if (existing.isLocked) {
+        return reply.status(423).send({
+          error: "Khóa học đang bị khóa. Hãy mở khóa trước khi xóa",
+        });
       }
 
       const [enrollmentCount, submissionCount] = await Promise.all([

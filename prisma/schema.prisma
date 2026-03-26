@@ -56,6 +56,7 @@ model Course {
   price        Decimal?     @default(0.00) @db.Decimal(10, 2)
   isPublished  Boolean      @default(false) @map("is_published")
   isActive     Boolean      @default(true) @map("is_active")
+  isLocked     Boolean      @default(false) @map("is_locked")
   syllabus     Json?
   slug         String?      @unique @db.VarChar(255)
   createdAt    DateTime     @default(now()) @map("created_at")
@@ -91,6 +92,7 @@ model Exam {
   durationMinutes Int?             @default(60) @map("duration_minutes")
   isPublished     Boolean          @default(false) @map("is_published")
   isActive        Boolean          @default(true) @map("is_active")
+  isLocked        Boolean          @default(false) @map("is_locked")
   isOpen          Boolean          @default(false) @map("is_open")
   maxParticipants Int?             @map("max_participants")
   currentParticipants Int          @default(0) @map("current_participants")

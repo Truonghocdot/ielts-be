@@ -14,6 +14,7 @@ export const createCourseSchema = z.object({
   slug: z.string().optional().nullable(),
   isPublished: z.boolean().optional().default(false),
   isActive: z.boolean().optional().default(true),
+  isLocked: z.boolean().optional().default(false),
 });
 
 export const updateCourseSchema = createCourseSchema.partial();

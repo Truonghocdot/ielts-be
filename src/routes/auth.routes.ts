@@ -335,6 +335,35 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return { message: "Mật khẩu đã được thay đổi thành công" };
     },
   );
+
+  // POST /auth/verify-password
+  fastify.post(
+    "/verify-password",
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const { id } = request.user;
+      const { password } = request.body as { password?: string };
+
+      if (!password) {
+        return reply.status(400).send({ error: "Yêu cầu mật khẩu" });
+      }
+
+      const user = await fastify.prisma.user.findUnique({
+        where: { id },
+        select: { password: true },
+      });
+      if (!user) {
+        return reply.status(404).send({ error: "Không tìm thấy người dùng" });
+      }
+
+      const valid = await verifyPassword(password, user.password);
+      if (!valid) {
+        return reply.status(401).send({ error: "Mật khẩu không chính xác" });
+      }
+
+      return { valid: true };
+    },
+  );
 };
 
 export default authRoutes;

@@ -4,6 +4,7 @@ import { createExamSchema, updateExamSchema } from "../schemas/exam.schema.js";
 import { authenticate, requireRoles } from "../middlewares/auth.middleware.js";
 import { handleValidation } from "../utils/validation.js";
 import { toFileUrl } from "../utils/file.js";
+import { verifyPassword } from "../utils/password.js";
 
 const examsRoutes: FastifyPluginAsync = async (fastify) => {
   const cleanQuestionData = (q: any, isAdminOrTeacher: boolean) => {
@@ -242,12 +243,32 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
       );
       if (!data) return;
 
-      const exam = await fastify.prisma.exam.update({
+      const existing = await fastify.prisma.exam.findUnique({
+        where: { id },
+        select: { id: true, isLocked: true },
+      });
+      if (!existing) {
+        return reply.status(404).send({ error: "Không tìm thấy bài thi" });
+      }
+
+      if (existing.isLocked) {
+        const updateKeys = Object.keys(data);
+        const lockOnlyUpdate =
+          updateKeys.length > 0 && updateKeys.every((key) => key === "isLocked");
+
+        if (!lockOnlyUpdate) {
+          return reply.status(423).send({
+            error: "Bài thi đang bị khóa. Hãy mở khóa trước khi chỉnh sửa",
+          });
+        }
+      }
+
+      const updatedExam = await fastify.prisma.exam.update({
         where: { id },
         data,
       });
 
-      return exam;
+      return updatedExam;
     },
   );
 
@@ -257,6 +278,38 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [authenticate, requireRoles("admin")] },
     async (request, reply) => {
       const { id } = request.params;
+      const { password } = (request.body || {}) as { password?: string };
+
+      if (!password) {
+        return reply.status(400).send({ error: "Yêu cầu mật khẩu xác nhận" });
+      }
+
+      const actor = await fastify.prisma.user.findUnique({
+        where: { id: request.user.id },
+        select: { password: true },
+      });
+      if (!actor) {
+        return reply.status(401).send({ error: "Không thể xác thực người dùng" });
+      }
+
+      const validPassword = await verifyPassword(password, actor.password);
+      if (!validPassword) {
+        return reply.status(401).send({ error: "Mật khẩu xác nhận không đúng" });
+      }
+
+      const existing = await fastify.prisma.exam.findUnique({
+        where: { id },
+        select: { id: true, isLocked: true },
+      });
+      if (!existing) {
+        return reply.status(404).send({ error: "Không tìm thấy bài thi" });
+      }
+      if (existing.isLocked) {
+        return reply.status(423).send({
+          error: "Bài thi đang bị khóa. Hãy mở khóa trước khi xóa",
+        });
+      }
+
       await fastify.prisma.exam.delete({ where: { id } });
       return { success: true };
     },

@@ -46,12 +46,50 @@ const updateQuestionGroupSchema = createQuestionGroupSchema.partial();
 const updateQuestionSchema = createQuestionSchema.partial();
 
 const questionsRoutes: FastifyPluginAsync = async (fastify) => {
-  const getNextOrderIndex = async (groupId: string) => {
-    const maxOrder = await fastify.prisma.question.aggregate({
-      where: { groupId },
-      _max: { orderIndex: true },
-    });
-    return (maxOrder._max.orderIndex ?? -1) + 1;
+  const MAX_AUTO_ORDER_RETRIES = 5;
+
+  const isPrismaErrorCode = (error: unknown, code: string) =>
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === code;
+
+  const createQuestionWithAutoOrder = async (data: any) => {
+    let attempt = 0;
+    let lastError: unknown;
+
+    while (attempt < MAX_AUTO_ORDER_RETRIES) {
+      try {
+        return await fastify.prisma.$transaction(
+          async (tx) => {
+            const maxOrder = await tx.question.aggregate({
+              where: { groupId: data.groupId },
+              _max: { orderIndex: true },
+            });
+            const nextOrderIndex = (maxOrder._max.orderIndex ?? -1) + 1;
+            return tx.question.create({
+              data: {
+                ...data,
+                orderIndex: nextOrderIndex,
+              },
+            });
+          },
+          { isolationLevel: "Serializable" },
+        );
+      } catch (error) {
+        lastError = error;
+        const shouldRetry =
+          isPrismaErrorCode(error, "P2002") || isPrismaErrorCode(error, "P2034");
+
+        if (!shouldRetry) {
+          throw error;
+        }
+
+        attempt += 1;
+      }
+    }
+
+    throw lastError;
   };
 
   const hasOrderConflict = async (
@@ -145,10 +183,21 @@ const questionsRoutes: FastifyPluginAsync = async (fastify) => {
         (Object.prototype.hasOwnProperty.call(body, "orderIndex") ||
           Object.prototype.hasOwnProperty.call(body, "order_index"));
 
-      const desiredOrder =
-        orderIndexProvided
-          ? data.orderIndex
-          : await getNextOrderIndex(data.groupId);
+      if (!orderIndexProvided) {
+        try {
+          const question = await createQuestionWithAutoOrder(data as any);
+          return reply.status(201).send(question);
+        } catch (error) {
+          if (isPrismaErrorCode(error, "P2002")) {
+            return reply.status(409).send({
+              error: "Thứ tự câu hỏi bị trùng trong cùng nhóm",
+            });
+          }
+          throw error;
+        }
+      }
+
+      const desiredOrder = data.orderIndex;
 
       if (await hasOrderConflict(data.groupId, desiredOrder)) {
         return reply.status(409).send({
@@ -158,11 +207,19 @@ const questionsRoutes: FastifyPluginAsync = async (fastify) => {
 
       data.orderIndex = desiredOrder;
 
-      const question = await fastify.prisma.question.create({
-        data: data as any,
-      });
-
-      return reply.status(201).send(question);
+      try {
+        const question = await fastify.prisma.question.create({
+          data: data as any,
+        });
+        return reply.status(201).send(question);
+      } catch (error) {
+        if (isPrismaErrorCode(error, "P2002")) {
+          return reply.status(409).send({
+            error: "Thứ tự câu hỏi bị trùng trong cùng nhóm",
+          });
+        }
+        throw error;
+      }
     },
   );
 
@@ -242,60 +299,79 @@ const questionsRoutes: FastifyPluginAsync = async (fastify) => {
           .send({ error: "Yêu cầu mảng questions và groupId" });
       }
 
-      const existingOrders = await fastify.prisma.question.findMany({
-        where: { groupId },
-        select: { orderIndex: true },
-      });
-      const usedOrders = new Set<number>();
-      existingOrders.forEach((item) => {
-        if (typeof item.orderIndex === "number") {
-          usedOrders.add(item.orderIndex);
-        }
-      });
-      const maxExisting =
-        usedOrders.size > 0 ? Math.max(...Array.from(usedOrders)) : -1;
-      let nextOrder = maxExisting + 1;
-      const batchOrders = new Set<number>();
+      let attempt = 0;
+      let lastError: unknown;
 
-      let payload: any[] = [];
-      try {
-        payload = questions.map((q: any) => {
-          const rawOrder =
-            q.orderIndex !== undefined && q.orderIndex !== null
-              ? q.orderIndex
-              : null;
-          const orderIndex = rawOrder !== null ? rawOrder : nextOrder++;
+      while (attempt < MAX_AUTO_ORDER_RETRIES) {
+        try {
+          const created = await fastify.prisma.$transaction(
+            async (tx) => {
+              const existingOrders = await tx.question.findMany({
+                where: { groupId },
+                select: { orderIndex: true },
+              });
+              const usedOrders = new Set<number>();
+              existingOrders.forEach((item) => {
+                if (typeof item.orderIndex === "number") {
+                  usedOrders.add(item.orderIndex);
+                }
+              });
+              const maxExisting =
+                usedOrders.size > 0 ? Math.max(...Array.from(usedOrders)) : -1;
+              let nextOrder = maxExisting + 1;
+              const batchOrders = new Set<number>();
 
-          if (usedOrders.has(orderIndex) || batchOrders.has(orderIndex)) {
-            throw new Error("DUPLICATE_ORDER_INDEX");
+              const payload = questions.map((q: any) => {
+                const rawOrder =
+                  q.orderIndex !== undefined && q.orderIndex !== null
+                    ? q.orderIndex
+                    : null;
+                const orderIndex = rawOrder !== null ? rawOrder : nextOrder++;
+
+                if (usedOrders.has(orderIndex) || batchOrders.has(orderIndex)) {
+                  throw new Error("DUPLICATE_ORDER_INDEX");
+                }
+                batchOrders.add(orderIndex);
+
+                return {
+                  groupId,
+                  questionType: q.questionType,
+                  questionText: q.questionText,
+                  options: q.options,
+                  correctAnswer: q.correctAnswer,
+                  audioUrl: q.audioUrl,
+                  points: q.points || 1,
+                  orderIndex,
+                };
+              });
+
+              const result = await tx.question.createMany({
+                data: payload,
+              });
+              return result.count;
+            },
+            { isolationLevel: "Serializable" },
+          );
+
+          return { created };
+        } catch (error: any) {
+          lastError = error;
+          if (error?.message === "DUPLICATE_ORDER_INDEX" || isPrismaErrorCode(error, "P2002")) {
+            return reply.status(409).send({
+              error: "Thứ tự câu hỏi bị trùng trong cùng nhóm",
+            });
           }
-          batchOrders.add(orderIndex);
 
-          return {
-            groupId,
-            questionType: q.questionType,
-            questionText: q.questionText,
-            options: q.options,
-            correctAnswer: q.correctAnswer,
-            audioUrl: q.audioUrl,
-            points: q.points || 1,
-            orderIndex,
-          };
-        });
-      } catch (error: any) {
-        if (error?.message === "DUPLICATE_ORDER_INDEX") {
-          return reply.status(409).send({
-            error: "Thứ tự câu hỏi bị trùng trong cùng nhóm",
-          });
+          if (isPrismaErrorCode(error, "P2034")) {
+            attempt += 1;
+            continue;
+          }
+
+          throw error;
         }
-        throw error;
       }
 
-      const created = await fastify.prisma.question.createMany({
-        data: payload,
-      });
-
-      return { created: created.count };
+      throw lastError;
     },
   );
 };

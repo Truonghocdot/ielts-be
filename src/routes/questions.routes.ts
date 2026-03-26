@@ -200,9 +200,17 @@ const questionsRoutes: FastifyPluginAsync = async (fastify) => {
       const desiredOrder = data.orderIndex;
 
       if (await hasOrderConflict(data.groupId, desiredOrder)) {
-        return reply.status(409).send({
-          error: "Thứ tự câu hỏi bị trùng trong cùng nhóm",
-        });
+        try {
+          const question = await createQuestionWithAutoOrder(data as any);
+          return reply.status(201).send(question);
+        } catch (error) {
+          if (isPrismaErrorCode(error, "P2002")) {
+            return reply.status(409).send({
+              error: "Thứ tự câu hỏi bị trùng trong cùng nhóm",
+            });
+          }
+          throw error;
+        }
       }
 
       data.orderIndex = desiredOrder;
@@ -214,9 +222,8 @@ const questionsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(201).send(question);
       } catch (error) {
         if (isPrismaErrorCode(error, "P2002")) {
-          return reply.status(409).send({
-            error: "Thứ tự câu hỏi bị trùng trong cùng nhóm",
-          });
+          const question = await createQuestionWithAutoOrder(data as any);
+          return reply.status(201).send(question);
         }
         throw error;
       }

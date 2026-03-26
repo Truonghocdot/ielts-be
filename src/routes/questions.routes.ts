@@ -267,10 +267,16 @@ const questionsRoutes: FastifyPluginAsync = async (fastify) => {
           ? data.orderIndex
           : existing.orderIndex ?? 0;
 
-      if (await hasOrderConflict(nextGroupId, nextOrderIndex, id)) {
-        return reply.status(409).send({
-          error: "Thứ tự câu hỏi bị trùng trong cùng nhóm",
-        });
+      const groupChanged = nextGroupId !== existing.groupId;
+      const orderChanged = nextOrderIndex !== (existing.orderIndex ?? 0);
+      const shouldValidateOrderConflict = groupChanged || orderChanged;
+
+      if (shouldValidateOrderConflict) {
+        if (await hasOrderConflict(nextGroupId, nextOrderIndex, id)) {
+          return reply.status(409).send({
+            error: "Thứ tự câu hỏi bị trùng trong cùng nhóm",
+          });
+        }
       }
 
       const question = await fastify.prisma.question.update({

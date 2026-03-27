@@ -60,8 +60,8 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
         where.isPublished = true;
         where.isActive = true;
       } else {
-        // Admin or Teacher: keep defaults (no enrollment filter)
-        // Adjust if they should only see active/published by default
+        // Admin/Teacher: hide soft-deleted courses by default
+        where.isActive = true;
       }
     }
 

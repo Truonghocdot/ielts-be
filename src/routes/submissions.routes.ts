@@ -39,6 +39,54 @@ function getRemainingSeconds(startedAt: Date | null, durationMinutes: number | n
 }
 
 const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
+  const manualQuestionCountCache = new Map<string, number>();
+
+  const getManualQuestionCount = async (examId: string) => {
+    if (manualQuestionCountCache.has(examId)) {
+      return manualQuestionCountCache.get(examId)!;
+    }
+
+    const count = await fastify.prisma.question.count({
+      where: {
+        group: {
+          section: {
+            examId,
+          },
+        },
+        questionType: { in: Array.from(MANUAL_TYPES) as any },
+      },
+    });
+    manualQuestionCountCache.set(examId, count);
+    return count;
+  };
+
+  const normalizeSubmissionStatus = async (submission: any) => {
+    if (!submission || submission.status !== "submitted" || !submission.examId) {
+      return submission;
+    }
+
+    const manualCount = await getManualQuestionCount(submission.examId);
+    if (manualCount > 0) {
+      return submission;
+    }
+
+    const gradedAt = submission.gradedAt ?? new Date();
+
+    await fastify.prisma.examSubmission.update({
+      where: { id: submission.id },
+      data: {
+        status: "graded",
+        gradedAt,
+      },
+    });
+
+    return {
+      ...submission,
+      status: "graded",
+      gradedAt,
+    };
+  };
+
   const cleanQuestionData = (q: any, isAdminOrTeacher: boolean) => {
     if (isAdminOrTeacher) return q;
     const cleaned = { ...q };
@@ -143,8 +191,12 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.prisma.examSubmission.count({ where }),
     ]);
 
+    const normalizedData = await Promise.all(
+      data.map((submission) => normalizeSubmissionStatus(submission)),
+    );
+
     return {
-      data,
+      data: normalizedData,
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   });
@@ -179,7 +231,11 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
-      return { data: latestSubmission ?? null };
+      const normalizedLatest = latestSubmission
+        ? await normalizeSubmissionStatus(latestSubmission)
+        : null;
+
+      return { data: normalizedLatest ?? null };
     },
   );
 
@@ -191,7 +247,7 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
       const { id } = request.params;
       const user = request.user;
 
-      const submission = await fastify.prisma.examSubmission.findUnique({
+      const rawSubmission = await fastify.prisma.examSubmission.findUnique({
         where: { id },
         include: {
           exam: {
@@ -221,9 +277,11 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
 
-      if (!submission) {
+      if (!rawSubmission) {
         return reply.status(404).send({ error: "Không tìm thấy bài nộp" });
       }
+
+      const submission = await normalizeSubmissionStatus(rawSubmission);
 
       // Check access permission
       const isAdmin = user.roles.includes("admin");
@@ -249,7 +307,7 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Format audioUrl in answers
-      const formattedAnswers = submission.answers.map((answer) => ({
+      const formattedAnswers = submission.answers.map((answer: any) => ({
         ...answer,
         audioUrl: toFileUrl(answer.audioUrl),
       }));

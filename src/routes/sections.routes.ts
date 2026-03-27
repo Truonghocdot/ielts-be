@@ -18,15 +18,28 @@ const createSectionSchema = z.object({
   examId: z.string({ required_error: "ID bài thi là bắt buộc" }),
   sectionType: sectionTypeEnum,
   title: z.string().min(1, "Tiêu đề là bắt buộc"),
-  instructions: z.string().optional(),
+  instructions: z.string().max(5_000_000, "Nội dung hướng dẫn quá dài").optional(),
   content: z.any().optional(),
   audioUrl: z.string().optional(),
-  audioScript: z.string().optional(),
+  audioScript: z.string().max(5_000_000, "Nội dung script quá dài").optional(),
   durationMinutes: z
     .number({ invalid_type_error: "Thời gian phải là số" })
     .int()
     .optional(),
   orderIndex: z.number().int().default(0),
+});
+
+const updateSectionSchema = z.object({
+  title: z.string().min(1, "Tiêu đề là bắt buộc").optional(),
+  instructions: z.string().max(5_000_000, "Nội dung hướng dẫn quá dài").optional(),
+  content: z.any().optional(),
+  audioUrl: z.string().optional(),
+  audioScript: z.string().max(5_000_000, "Nội dung script quá dài").optional(),
+  durationMinutes: z
+    .number({ invalid_type_error: "Thời gian phải là số" })
+    .int()
+    .optional(),
+  orderIndex: z.number().int().optional(),
 });
 
 const sectionsRoutes: FastifyPluginAsync = async (fastify) => {
@@ -136,14 +149,28 @@ const sectionsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [authenticate, requireRoles("admin", "teacher")] },
     async (request, reply) => {
       const { id } = request.params;
-      const data = request.body as any;
+      const data = handleValidation(
+        updateSectionSchema.safeParse(request.body),
+        request,
+        reply,
+      );
+      if (!data) return;
 
-      const section = await fastify.prisma.examSection.update({
-        where: { id },
-        data,
-      });
+      try {
+        const section = await fastify.prisma.examSection.update({
+          where: { id },
+          data,
+        });
 
-      return withFileUrls(section, ["audioUrl"]);
+        return withFileUrls(section, ["audioUrl"]);
+      } catch (error: any) {
+        if (error?.code === "P2000") {
+          return reply.status(400).send({
+            error: "Nội dung quá dài cho trường lưu trữ",
+          });
+        }
+        throw error;
+      }
     },
   );
 

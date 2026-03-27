@@ -112,7 +112,7 @@ model ExamSection {
   examId          String          @map("exam_id")
   sectionType     ExamSectionType @map("section_type")
   title           String          @db.VarChar(255)
-  instructions    String?         @db.Text
+  instructions    String?         @db.LongText
   content         Json?
   audioUrl        String?         @map("audio_url") @db.Text
   audioScript     String?         @map("audio_script") @db.LongText

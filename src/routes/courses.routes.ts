@@ -12,6 +12,32 @@ import { toFileUrl, withFileUrls } from "../utils/file.js";
 import { verifyPassword } from "../utils/password.js";
 
 const coursesRoutes: FastifyPluginAsync = async (fastify) => {
+  const slugify = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "");
+
+  const buildUniqueSlug = async (baseInput: string, excludeId?: string) => {
+    const base = slugify(baseInput) || "course";
+    let candidate = base;
+    let counter = 2;
+
+    while (true) {
+      const existing = await fastify.prisma.course.findFirst({
+        where: {
+          slug: candidate,
+          ...(excludeId ? { id: { not: excludeId } } : {}),
+        },
+        select: { id: true },
+      });
+
+      if (!existing) return candidate;
+      candidate = `${base}-${counter}`;
+      counter += 1;
+    }
+  };
+
   // GET /courses - List all courses (public)
   fastify.get("/", async (request, reply) => {
     const query = paginationSchema.safeParse(request.query);
@@ -246,23 +272,34 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
 
       const { id: teacherId } = request.user;
 
-      // Generate slug if not provided
       if (!data.slug && data.title) {
-        data.slug = data.title
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, "");
+        data.slug = await buildUniqueSlug(data.title);
+      } else if (data.slug) {
+        const existingSlug = await fastify.prisma.course.findFirst({
+          where: { slug: data.slug },
+          select: { id: true },
+        });
+        if (existingSlug) {
+          return reply.status(409).send({ error: "Slug khóa học đã tồn tại" });
+        }
       }
 
-      const course = await fastify.prisma.course.create({
-        data: {
-          ...data,
-          price: data.price || 0,
-          teacherId,
-        },
-      });
+      try {
+        const course = await fastify.prisma.course.create({
+          data: {
+            ...data,
+            price: data.price || 0,
+            teacherId,
+          },
+        });
 
-      return reply.status(201).send(withFileUrls(course, ["thumbnailUrl"]));
+        return reply.status(201).send(withFileUrls(course, ["thumbnailUrl"]));
+      } catch (error: any) {
+        if (error?.code === "P2002") {
+          return reply.status(409).send({ error: "Slug khóa học đã tồn tại" });
+        }
+        throw error;
+      }
     },
   );
 
@@ -300,12 +337,40 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      const course = await fastify.prisma.course.update({
-        where: { id },
-        data,
-      });
+      if (data.slug) {
+        const existingSlug = await fastify.prisma.course.findFirst({
+          where: {
+            slug: data.slug,
+            id: { not: id },
+          },
+          select: { id: true },
+        });
+        if (existingSlug) {
+          return reply.status(409).send({ error: "Slug khóa học đã tồn tại" });
+        }
+      }
 
-      return withFileUrls(course, ["thumbnailUrl"]);
+      let updateData: any = data;
+      if (!data.slug && data.title && data.title !== existing.title) {
+        updateData = {
+          ...data,
+          slug: await buildUniqueSlug(data.title, id),
+        };
+      }
+
+      try {
+        const course = await fastify.prisma.course.update({
+          where: { id },
+          data: updateData,
+        });
+
+        return withFileUrls(course, ["thumbnailUrl"]);
+      } catch (error: any) {
+        if (error?.code === "P2002") {
+          return reply.status(409).send({ error: "Slug khóa học đã tồn tại" });
+        }
+        throw error;
+      }
     },
   );
 

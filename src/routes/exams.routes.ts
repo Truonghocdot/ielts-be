@@ -299,10 +299,15 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
 
       const existing = await fastify.prisma.exam.findUnique({
         where: { id },
-        select: { id: true },
+        select: { id: true, isLocked: true },
       });
       if (!existing) {
         return reply.status(404).send({ error: "Không tìm thấy bài thi" });
+      }
+      if (existing.isLocked) {
+        return reply.status(423).send({
+          error: "Bài thi đang bị khóa. Hãy mở khóa trước khi xóa",
+        });
       }
 
       await fastify.prisma.exam.delete({ where: { id } });

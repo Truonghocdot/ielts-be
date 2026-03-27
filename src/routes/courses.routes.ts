@@ -401,10 +401,15 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
 
       const existing = await fastify.prisma.course.findUnique({
         where: { id },
-        select: { id: true },
+        select: { id: true, isLocked: true },
       });
       if (!existing) {
         return reply.status(404).send({ error: "Không tìm thấy khóa học" });
+      }
+      if (existing.isLocked) {
+        return reply.status(423).send({
+          error: "Khóa học đang bị khóa. Hãy mở khóa trước khi xóa",
+        });
       }
 
       const [enrollmentCount, submissionCount] = await Promise.all([

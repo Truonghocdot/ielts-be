@@ -113,7 +113,7 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
     );
     if (!dataQuery) return;
 
-    const { examId, studentId, status, classId } = request.query as any;
+    const { examId, studentId, status, classId, needGrading } = request.query as any;
     const { page, limit, sortBy = "createdAt", sortOrder } = dataQuery;
     const skip = (page - 1) * limit;
     const user = request.user;
@@ -173,7 +173,26 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     if (examId) where.examId = examId;
-    if (status) where.status = status;
+    if (needGrading) {
+      where.status = "submitted";
+      where.exam = {
+        sections: {
+          some: {
+            questionGroups: {
+              some: {
+                questions: {
+                  some: {
+                    questionType: { in: Array.from(MANUAL_TYPES) as any },
+                  },
+                },
+              },
+            },
+          },
+        },
+      };
+    } else if (status) {
+      where.status = status;
+    }
 
     const [data, total] = await Promise.all([
       fastify.prisma.examSubmission.findMany({

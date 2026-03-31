@@ -1,4 +1,5 @@
 import { FastifyPluginAsync } from "fastify";
+import { Prisma } from "@prisma/client";
 import { paginationSchema } from "../schemas/common.schema.js";
 import {
   createCourseSchema,
@@ -325,18 +326,6 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: "Không tìm thấy khóa học" });
       }
 
-      if (existing.isLocked) {
-        const updateKeys = Object.keys(data);
-        const lockOnlyUpdate =
-          updateKeys.length > 0 && updateKeys.every((key) => key === "isLocked");
-
-        if (!lockOnlyUpdate) {
-          return reply.status(423).send({
-            error: "Khóa học đang bị khóa. Hãy mở khóa trước khi chỉnh sửa",
-          });
-        }
-      }
-
       if (data.slug) {
         const existingSlug = await fastify.prisma.course.findFirst({
           where: {
@@ -401,12 +390,18 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
 
       const existing = await fastify.prisma.course.findUnique({
         where: { id },
-        select: { id: true, isLocked: true },
+        select: { id: true },
       });
       if (!existing) {
         return reply.status(404).send({ error: "Không tìm thấy khóa học" });
       }
-      if (existing.isLocked) {
+
+      const lockRows = await fastify.prisma.$queryRaw<
+        Array<{ is_locked: number | boolean | null }>
+      >(Prisma.sql`SELECT is_locked FROM courses WHERE id = ${id} LIMIT 1`);
+      const isLocked = Boolean(lockRows[0]?.is_locked);
+
+      if (isLocked) {
         return reply.status(423).send({
           error: "Khóa học đang bị khóa. Hãy mở khóa trước khi xóa",
         });

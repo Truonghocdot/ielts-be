@@ -1,4 +1,5 @@
 import { FastifyPluginAsync } from "fastify";
+import { Prisma } from "@prisma/client";
 import { paginationSchema } from "../schemas/common.schema.js";
 import { createExamSchema, updateExamSchema } from "../schemas/exam.schema.js";
 import { authenticate, requireRoles } from "../middlewares/auth.middleware.js";
@@ -245,22 +246,10 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
 
       const existing = await fastify.prisma.exam.findUnique({
         where: { id },
-        select: { id: true, isLocked: true },
+        select: { id: true },
       });
       if (!existing) {
         return reply.status(404).send({ error: "Không tìm thấy bài thi" });
-      }
-
-      if (existing.isLocked) {
-        const updateKeys = Object.keys(data);
-        const lockOnlyUpdate =
-          updateKeys.length > 0 && updateKeys.every((key) => key === "isLocked");
-
-        if (!lockOnlyUpdate) {
-          return reply.status(423).send({
-            error: "Bài thi đang bị khóa. Hãy mở khóa trước khi chỉnh sửa",
-          });
-        }
       }
 
       const updatedExam = await fastify.prisma.exam.update({
@@ -299,12 +288,18 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
 
       const existing = await fastify.prisma.exam.findUnique({
         where: { id },
-        select: { id: true, isLocked: true },
+        select: { id: true },
       });
       if (!existing) {
         return reply.status(404).send({ error: "Không tìm thấy bài thi" });
       }
-      if (existing.isLocked) {
+
+      const lockRows = await fastify.prisma.$queryRaw<
+        Array<{ is_locked: number | boolean | null }>
+      >(Prisma.sql`SELECT is_locked FROM exams WHERE id = ${id} LIMIT 1`);
+      const isLocked = Boolean(lockRows[0]?.is_locked);
+
+      if (isLocked) {
         return reply.status(423).send({
           error: "Bài thi đang bị khóa. Hãy mở khóa trước khi xóa",
         });

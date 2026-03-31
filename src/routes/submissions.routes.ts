@@ -175,6 +175,7 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
     if (examId) where.examId = examId;
     if (needGrading) {
       where.status = "submitted";
+      where.submittedAt = { not: null };
       where.exam = {
         sections: {
           some: {

@@ -7,7 +7,7 @@ export async function authenticate(
   try {
     await request.jwtVerify();
   } catch (err) {
-    reply
+    return reply
       .status(401)
       .send({ error: "Unauthorized", message: "Invalid or expired token" });
   }
@@ -18,17 +18,18 @@ export function requireRoles(...roles: string[]) {
     try {
       await request.jwtVerify();
 
-      const user = request.user;
-      const hasRole = user.roles.some((r: string) => roles.includes(r));
+      const user = request.user as { roles?: string[] };
+      const userRoles = Array.isArray(user?.roles) ? user.roles : [];
+      const hasRole = userRoles.some((r: string) => roles.includes(r));
 
       if (!hasRole) {
-        reply.status(403).send({
+        return reply.status(403).send({
           error: "Forbidden",
           message: `Required roles: ${roles.join(", ")}`,
         });
       }
     } catch (err) {
-      reply
+      return reply
         .status(401)
         .send({ error: "Unauthorized", message: "Invalid or expired token" });
     }

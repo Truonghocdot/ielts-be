@@ -31,6 +31,8 @@ model User {
   roles             UserRole[]
   classesAsTeacher  Class[]          @relation("TeacherClasses")
   classesAsStudent  ClassStudent[]
+  attendanceRecords ClassAttendance[] @relation("AttendanceStudent")
+  attendanceMarked  ClassAttendance[] @relation("AttendanceMarker")
 
   @@map("users")
 }
@@ -236,9 +238,48 @@ model Class {
 
   teacher  User?          @relation("TeacherClasses", fields: [teacherId], references: [id])
   students ClassStudent[]
+  schedules  ClassSchedule[]
+  attendance ClassAttendance[]
 
   @@index([teacherId], map: "classes_teacher_id_fkey")
   @@map("classes")
+}
+
+model ClassSchedule {
+  id              String   @id @default(uuid())
+  classId         String   @map("class_id")
+  dayOfWeek       Int      @map("day_of_week")
+  startTime       String   @map("start_time") @db.VarChar(5)
+  durationMinutes Int      @map("duration_minutes")
+  timezone        String   @default("Asia/Ho_Chi_Minh") @db.VarChar(64)
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  class           Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, dayOfWeek, startTime])
+  @@index([classId], map: "class_schedules_class_id_idx")
+  @@map("class_schedules")
+}
+
+model ClassAttendance {
+  id          String           @id @default(uuid())
+  classId     String           @map("class_id")
+  studentId   String           @map("student_id")
+  sessionDate DateTime         @map("session_date") @db.Date
+  status      AttendanceStatus @default(present)
+  note        String?          @db.Text
+  markedBy    String?          @map("marked_by")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  class       Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student     User             @relation("AttendanceStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  marker      User?            @relation("AttendanceMarker", fields: [markedBy], references: [id], onDelete: SetNull)
+
+  @@unique([classId, studentId, sessionDate])
+  @@index([classId, sessionDate], map: "class_attendance_class_id_session_date_idx")
+  @@index([studentId], map: "class_attendance_student_id_idx")
+  @@map("class_attendance")
 }
 
 model ClassStudent {
@@ -285,4 +326,10 @@ enum SubmissionStatus {
   in_progress
   submitted
   graded
+}
+
+enum AttendanceStatus {
+  present
+  absent
+  late
 }

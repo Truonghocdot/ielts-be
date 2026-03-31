@@ -194,9 +194,10 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
         reply,
       );
       if (!data) return;
+      const { isLocked: _ignoredIsLocked, ...safeData } = data as any;
 
       const exam = await fastify.prisma.exam.create({
-        data,
+        data: safeData,
       });
 
       // Auto-create 5 default sections
@@ -243,6 +244,7 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
         reply,
       );
       if (!data) return;
+      const { isLocked: _ignoredIsLocked, ...safeData } = data as any;
 
       const existing = await fastify.prisma.exam.findUnique({
         where: { id },
@@ -254,7 +256,7 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
 
       const updatedExam = await fastify.prisma.exam.update({
         where: { id },
-        data,
+        data: safeData,
       });
 
       return updatedExam;

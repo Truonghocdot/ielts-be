@@ -286,10 +286,11 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       try {
+        const { isLocked: _ignoredIsLocked, ...safeData } = data as any;
         const course = await fastify.prisma.course.create({
           data: {
-            ...data,
-            price: data.price || 0,
+            ...safeData,
+            price: safeData.price || 0,
             teacherId,
           },
         });
@@ -346,11 +347,12 @@ const coursesRoutes: FastifyPluginAsync = async (fastify) => {
           slug: await buildUniqueSlug(data.title, id),
         };
       }
+      const { isLocked: _ignoredIsLocked, ...safeUpdateData } = updateData;
 
       try {
         const course = await fastify.prisma.course.update({
           where: { id },
-          data: updateData,
+          data: safeUpdateData,
         });
 
         return withFileUrls(course, ["thumbnailUrl"]);

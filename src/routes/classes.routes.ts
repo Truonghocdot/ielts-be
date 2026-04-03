@@ -5,7 +5,6 @@ import { Prisma } from "@prisma/client";
 import { authenticate, requireRoles } from "../middlewares/auth.middleware.js";
 import { paginationSchema } from "../schemas/common.schema.js";
 import { isTeacherOfClass } from "../utils/teacherScope.js";
-import { addMonths, startOfMonth } from "date-fns";
 
 const createClassSchema = z.object({
   name: z.string().min(1, "Tên lớp là bắt buộc"),
@@ -39,13 +38,20 @@ const normalizeAttendanceStatus = (
 
 const parseMonthRange = (month?: string) => {
   const now = new Date();
-  const base =
-    month && /^\d{4}-\d{2}$/.test(month)
-      ? new Date(`${month}-01T00:00:00Z`)
-      : startOfMonth(now);
-  const start = startOfMonth(base);
-  const end = addMonths(start, 1);
-  return { start, end, monthLabel: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}` };
+  let year = now.getUTCFullYear();
+  let m = now.getUTCMonth() + 1; // 1-12
+  if (month && /^\d{4}-\d{2}$/.test(month)) {
+    const [yStr, mStr] = month.split("-");
+    year = Number(yStr);
+    m = Number(mStr);
+  }
+  const start = new Date(Date.UTC(year, m - 1, 1, 0, 0, 0));
+  const end = new Date(Date.UTC(year, m, 1, 0, 0, 0));
+  return {
+    start,
+    end,
+    monthLabel: `${start.getUTCFullYear()}-${String(start.getUTCMonth() + 1).padStart(2, "0")}`,
+  };
 };
 
 const classScheduleSchema = z.object({

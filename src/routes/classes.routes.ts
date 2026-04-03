@@ -485,6 +485,17 @@ const classesRoutes: FastifyPluginAsync = async (fastify) => {
       const { dayOfWeek, startTime, durationMinutes, timezone, isActive } =
         parsed.data;
 
+      // Prevent duplicate (same class + dayOfWeek + startTime)
+      const duplicate = await fastify.prisma.classSchedule.findFirst({
+        where: { classId: id, dayOfWeek, startTime },
+        select: { id: true },
+      });
+      if (duplicate) {
+        return reply.status(409).send({
+          error: "Lịch học đã tồn tại (trùng ngày và giờ bắt đầu)",
+        });
+      }
+
       await fastify.prisma.$executeRaw(Prisma.sql`
         INSERT INTO class_schedules (
           id, class_id, day_of_week, start_time, duration_minutes, timezone, is_active

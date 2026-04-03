@@ -28,6 +28,14 @@ const addStudentsSchema = z.object({
   studentIds: z.array(z.string()).min(1, "Cần ít nhất 1 học sinh"),
 });
 
+const normalizeAttendanceStatus = (
+  status: string | null | undefined,
+): "present" | "absent" | "inactive" => {
+  if (status === "present") return "present";
+  if (status === "inactive") return "inactive";
+  return "absent";
+};
+
 const classScheduleSchema = z.object({
   dayOfWeek: z.number().int().min(0).max(6),
   startTime: z.string().regex(/^\d{2}:\d{2}$/),
@@ -41,7 +49,7 @@ const classAttendanceUpsertSchema = z.object({
   records: z.array(
     z.object({
       studentId: z.string().min(1),
-      status: z.enum(["present", "absent", "late"]),
+      status: z.enum(["present", "absent", "inactive"]),
       note: z.string().max(500).optional().nullable(),
     }),
   ),
@@ -569,7 +577,10 @@ const classesRoutes: FastifyPluginAsync = async (fastify) => {
       `);
 
       const byStudent = new Map(
-        attendanceRows.map((r) => [r.student_id, { status: r.status, note: r.note }]),
+        attendanceRows.map((r) => [
+          r.student_id,
+          { status: normalizeAttendanceStatus(r.status), note: r.note },
+        ]),
       );
 
       return {
@@ -633,6 +644,105 @@ const classesRoutes: FastifyPluginAsync = async (fastify) => {
       );
 
       return { success: true, updated: records.length };
+    },
+  );
+
+  // GET /classes/:id/attendance/history - Lịch sử + thống kê chuyên cần
+  fastify.get<{ Params: { id: string } }>(
+    "/:id/attendance/history",
+    { preHandler: [authenticate, requireRoles("admin", "teacher")] },
+    async (request, reply) => {
+      const { id } = request.params;
+
+      const classData = await fastify.prisma.class.findUnique({
+        where: { id },
+        include: {
+          students: {
+            include: {
+              student: {
+                select: { id: true, fullName: true, email: true, avatarUrl: true },
+              },
+            },
+            orderBy: { joinedAt: "asc" },
+          },
+        },
+      });
+      if (!classData) {
+        return reply.status(404).send({ error: "Không tìm thấy lớp học" });
+      }
+
+      const roles = ((request.user as any).roles || []).map((r: any) =>
+        typeof r === "string" ? r : r?.role,
+      );
+      const isAdmin = roles.includes("admin");
+      if (!isAdmin && classData.teacherId !== (request.user as any).id) {
+        return reply.status(403).send({ error: "Từ chối truy cập" });
+      }
+
+      const dateRows = await fastify.prisma.classAttendance.findMany({
+        where: { classId: id },
+        select: { sessionDate: true },
+        distinct: ["sessionDate"],
+        orderBy: { sessionDate: "asc" },
+      });
+
+      const sessionDates = dateRows.map((d) =>
+        d.sessionDate.toISOString().slice(0, 10),
+      );
+
+      const attendanceRows = await fastify.prisma.classAttendance.findMany({
+        where: { classId: id },
+        select: {
+          studentId: true,
+          sessionDate: true,
+          status: true,
+        },
+      });
+
+      const recordsByStudent: Record<
+        string,
+        Record<string, "present" | "absent" | "inactive">
+      > = {};
+      attendanceRows.forEach((row) => {
+        const dateKey = row.sessionDate.toISOString().slice(0, 10);
+        if (!recordsByStudent[row.studentId]) {
+          recordsByStudent[row.studentId] = {};
+        }
+        recordsByStudent[row.studentId][dateKey] = normalizeAttendanceStatus(
+          row.status,
+        );
+      });
+
+      const students = (classData.students || []).map((cs: any) => {
+        const statusMap = recordsByStudent[cs.studentId] || {};
+        let present = 0;
+        let absent = 0;
+        Object.values(statusMap).forEach((status) => {
+          if (status === "present") present += 1;
+          else if (status === "absent") absent += 1;
+        });
+        const totalCount = present + absent;
+        const attendanceRate = totalCount > 0 ? present / totalCount : 0;
+        return {
+          studentId: cs.studentId,
+          fullName: cs.student?.fullName || "Chưa đặt tên",
+          email: cs.student?.email || "",
+          avatarUrl: cs.student?.avatarUrl || null,
+          statuses: statusMap,
+          summary: {
+            present,
+            absent,
+            attendanceRate,
+            isEligible: attendanceRate >= 0.8,
+          },
+        };
+      });
+
+      return {
+        classId: id,
+        sessionDates,
+        students,
+      };
     },
   );
 };

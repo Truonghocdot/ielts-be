@@ -331,5 +331,5 @@ enum SubmissionStatus {
 enum AttendanceStatus {
   present
   absent
-  late
+  inactive
 }

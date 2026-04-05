@@ -296,6 +296,36 @@ model ClassStudent {
   @@map("class_students")
 }
 
+model SiteSettings {
+  id                         String   @id @default("default")
+  siteName                   String   @default("NextBand") @map("site_name") @db.VarChar(255)
+  logoUrl                    String?  @map("logo_url") @db.Text
+  highlightPresent           String   @default("#fff7a5") @map("highlight_present") @db.VarChar(20)
+  highlightAbsent            String   @default("#ffd7d7") @map("highlight_absent") @db.VarChar(20)
+  highlightInactive          String   @default("#e5e7eb") @map("highlight_inactive") @db.VarChar(20)
+  sloganText                 String   @default("Khám phá khóa học IELTS") @map("slogan_text") @db.VarChar(100)
+  sloganFontFamily           String   @default("'Be Vietnam Pro', sans-serif") @map("slogan_font_family") @db.VarChar(191)
+  sloganFontWeight           String   @default("bold") @map("slogan_font_weight") @db.VarChar(20)
+  sloganDesktopSize          Int      @default(56) @map("slogan_desktop_size")
+  sloganMobileSize           Int      @default(34) @map("slogan_mobile_size")
+  sloganColor                String   @default("#0f172a") @map("slogan_color") @db.VarChar(20)
+  sloganAlign                String   @default("left") @map("slogan_align") @db.VarChar(20)
+  sloganLineHeight           Decimal  @default(1.20) @map("slogan_line_height") @db.Decimal(3, 2)
+  heroDescriptionText        String   @default("Nâng cao kỹ năng tiếng Anh của bạn với các khóa học được thiết kế bởi đội ngũ giáo viên giàu kinh nghiệm.") @map("hero_description_text") @db.VarChar(300)
+  heroDescriptionFontFamily  String   @default("'Be Vietnam Pro', sans-serif") @map("hero_description_font_family") @db.VarChar(191)
+  heroDescriptionFontWeight  String   @default("regular") @map("hero_description_font_weight") @db.VarChar(20)
+  heroDescriptionDesktopSize Int      @default(30) @map("hero_description_desktop_size")
+  heroDescriptionMobileSize  Int      @default(20) @map("hero_description_mobile_size")
+  heroDescriptionColor       String   @default("#64748b") @map("hero_description_color") @db.VarChar(20)
+  heroDescriptionAlign       String   @default("left") @map("hero_description_align") @db.VarChar(20)
+  heroDescriptionLineHeight  Decimal  @default(1.60) @map("hero_description_line_height") @db.Decimal(3, 2)
+  updatedBy                  String?  @map("updated_by")
+  updatedAt                  DateTime @updatedAt @map("updated_at")
+  createdAt                  DateTime @default(now()) @map("created_at")
+
+  @@map("site_settings")
+}
+
 enum AppRole {
   admin
   teacher

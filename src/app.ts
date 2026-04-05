@@ -39,6 +39,20 @@ export async function buildApp() {
     },
   });
 
+  // Force-disable caching for all API responses to avoid stale data across clients/devices.
+  app.addHook("onSend", async (request, reply, payload) => {
+    if (request.url.startsWith("/api/")) {
+      reply.header(
+        "Cache-Control",
+        "no-store, no-cache, must-revalidate, proxy-revalidate",
+      );
+      reply.header("Pragma", "no-cache");
+      reply.header("Expires", "0");
+      reply.header("Surrogate-Control", "no-store");
+    }
+    return payload;
+  });
+
   // CORS
   await app.register(cors, {
     origin: env.NODE_ENV === "production" ? env.FRONTEND_URL : true,

@@ -391,7 +391,7 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     if (!exam.isPublished) {
-      return reply.status(400).send({ error: "Bài thi chưa được xuất bản" });
+      return reply.status(400).send({ error: "Bài tập chưa được xuất bản" });
     }
 
     // IDOR Check: Students must be enrolled unless exam is open
@@ -400,7 +400,7 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (!isAdmin && !isTeacher) {
       if (!exam.isActive) {
-        return reply.status(403).send({ error: "Bài thi hiện đang bị khóa" });
+        return reply.status(403).send({ error: "Bài tập hiện đang bị khóa" });
       }
 
       if (!exam.isOpen) {
@@ -565,7 +565,7 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (error: any) {
       if (error?.message === "OPEN_EXAM_FULL") {
         return reply.status(409).send({
-          error: "Bài thi mở đã đạt giới hạn người tham gia",
+          error: "Bài tập mở đã đạt giới hạn người tham gia",
         });
       }
       throw error;
@@ -891,7 +891,7 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
             });
 
             if (enrollment) {
-              // 1. Đếm tổng số bài thi đang có trong khóa (Published & Active)
+              // 1. Đếm tổng số bài tập đang có trong khóa (Published & Active)
               const totalExams = await fastify.prisma.exam.count({
                 where: {
                   courseId: exam.courseId,
@@ -983,7 +983,7 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
       if (submission.status === "in_progress") {
         return reply
           .status(400)
-          .send({ error: "Bài thi vẫn đang trong quá trình thực hiện" });
+          .send({ error: "Bài tập vẫn đang trong quá trình thực hiện" });
       }
 
       // Update individual answer grades

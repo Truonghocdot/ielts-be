@@ -15,7 +15,7 @@ const sectionTypeEnum = z.enum(
 );
 
 const createSectionSchema = z.object({
-  examId: z.string({ required_error: "ID bài thi là bắt buộc" }),
+  examId: z.string({ required_error: "ID bài tập là bắt buộc" }),
   sectionType: sectionTypeEnum,
   title: z.string().min(1, "Tiêu đề là bắt buộc"),
   instructions: z.string().max(5_000_000, "Nội dung hướng dẫn quá dài").optional(),
@@ -180,7 +180,7 @@ const sectionsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [authenticate, requireRoles("admin")] },
     async (request, reply) => {
       return reply.status(403).send({
-        error: "Không thể xóa section. Mỗi bài thi luôn có đủ 5 sections.",
+        error: "Không thể xóa section. Mỗi bài tập luôn có đủ 5 sections.",
       });
     },
   );

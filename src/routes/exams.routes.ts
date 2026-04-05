@@ -153,7 +153,7 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         if (!exam.isPublished || !exam.isActive) {
-          return reply.status(403).send({ error: "Bài thi hiện không còn khả dụng" });
+          return reply.status(403).send({ error: "bài tập hiện không còn khả dụng" });
         }
       }
 
@@ -303,7 +303,7 @@ const examsRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (isLocked) {
         return reply.status(423).send({
-          error: "Bài thi đang bị khóa. Hãy mở khóa trước khi xóa",
+          error: "Bài tập đang bị khóa. Hãy mở khóa trước khi xóa",
         });
       }
 

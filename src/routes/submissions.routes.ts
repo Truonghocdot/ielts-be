@@ -26,6 +26,7 @@ const OBJECTIVE_TYPES = new Set([
 ]);
 
 const MANUAL_TYPES = new Set(["essay", "speaking"]);
+const MAX_EXAM_ATTEMPTS = 3;
 
 function getRemainingSeconds(startedAt: Date | null, durationMinutes: number | null) {
   const safeDuration = Math.max(1, durationMinutes || 60);
@@ -469,6 +470,23 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
+    const attemptCount = await fastify.prisma.examSubmission.count({
+      where: {
+        examId,
+        studentId: user.id,
+      },
+    });
+
+    const isPrivileged = user.roles.includes("admin") || user.roles.includes("teacher");
+    if (!isPrivileged && attemptCount >= MAX_EXAM_ATTEMPTS) {
+      return reply.status(409).send({
+        error: `Bạn đã sử dụng hết ${MAX_EXAM_ATTEMPTS} lượt làm bài cho bài thi này`,
+        maxAttempts: MAX_EXAM_ATTEMPTS,
+        attemptCount,
+        remainingAttempts: 0,
+      });
+    }
+
     // Open exam participant quota + refresh spam protection.
     // Count a user only once per exam (first time they ever start/submit).
     const hadAnySubmissionBefore = await fastify.prisma.examSubmission.findFirst({
@@ -558,6 +576,9 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
           ...created,
           remainingSeconds: Math.max(1, (exam.durationMinutes || 60) * 60),
           serverTime: new Date().toISOString(),
+          attemptCount: attemptCount + 1,
+          maxAttempts: MAX_EXAM_ATTEMPTS,
+          remainingAttempts: Math.max(0, MAX_EXAM_ATTEMPTS - (attemptCount + 1)),
         };
       });
 

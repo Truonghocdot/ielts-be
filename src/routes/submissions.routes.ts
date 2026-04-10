@@ -335,7 +335,7 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
       // Format question data to hide answers if user is a student
       const isAdminOrTeacher = isAdmin || isTeacher;
 
-      const canShowTranscript = submission.status !== "in_progress";
+      const canShowTranscript = isAdminOrTeacher && submission.status !== "in_progress";
       const formattedExam = {
         ...submission.exam,
         sections: submission.exam.sections.map((section: any) => ({
@@ -713,11 +713,10 @@ const submissionsRoutes: FastifyPluginAsync = async (fastify) => {
                     // since the question itself was already counted as 1.
                     totalQuestions += (blankCount - 1);
                     correctAnswers += correctBlanks;
-                    const totalPoints = question.points || 1;
-                    const partialScore = (correctBlanks / blankCount) * totalPoints;
+                    const partialScore = correctBlanks;
                     objectiveScore += partialScore;
 
-                    // Set fractional score based on correct blanks
+                    // Score the answer by the number of correct blanks
                     const answerRecord = submittedAnswers.find(a => a.questionId === question.id);
                     if (answerRecord) {
                       await fastify.prisma.answer.update({

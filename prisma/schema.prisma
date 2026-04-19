@@ -300,6 +300,11 @@ model SiteSettings {
   id                         String   @id @default("default")
   siteName                   String   @default("NextBand") @map("site_name") @db.VarChar(255)
   logoUrl                    String?  @map("logo_url") @db.Text
+  authTagline                String   @default("Nền tảng học IELTS hiện đại") @map("auth_tagline") @db.VarChar(120)
+  authFeatureOneTitle        String   @default("Khóa học chất lượng") @map("auth_feature_one_title") @db.VarChar(120)
+  authFeatureOneDescription  String   @default("Hàng trăm bài học từ cơ bản đến nâng cao") @map("auth_feature_one_description") @db.VarChar(160)
+  authFeatureTwoTitle        String   @default("Giáo viên uy tín") @map("auth_feature_two_title") @db.VarChar(120)
+  authFeatureTwoDescription  String   @default("Đội ngũ giáo viên giàu kinh nghiệm") @map("auth_feature_two_description") @db.VarChar(160)
   highlightPresent           String   @default("#fff7a5") @map("highlight_present") @db.VarChar(20)
   highlightAbsent            String   @default("#ffd7d7") @map("highlight_absent") @db.VarChar(20)
   highlightInactive          String   @default("#e5e7eb") @map("highlight_inactive") @db.VarChar(20)

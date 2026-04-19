@@ -14,6 +14,14 @@ function normalizeRow(row: any) {
   return {
     ...row,
     logoUrl: row?.logoUrl || "",
+    authTagline: row?.authTagline || "Nền tảng học IELTS hiện đại",
+    authFeatureOneTitle: row?.authFeatureOneTitle || "Khóa học chất lượng",
+    authFeatureOneDescription:
+      row?.authFeatureOneDescription ||
+      "Hàng trăm bài học từ cơ bản đến nâng cao",
+    authFeatureTwoTitle: row?.authFeatureTwoTitle || "Giáo viên uy tín",
+    authFeatureTwoDescription:
+      row?.authFeatureTwoDescription || "Đội ngũ giáo viên giàu kinh nghiệm",
     sloganLineHeight: Number(row?.sloganLineHeight ?? 1.2),
     heroDescriptionLineHeight: Number(row?.heroDescriptionLineHeight ?? 1.6),
   };
@@ -23,7 +31,7 @@ const siteSettingsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/", { preHandler: authenticate }, async () => {
     await ensureDefaultRow(fastify);
     const rows = await fastify.prisma.$queryRawUnsafe<any[]>(
-      "SELECT `id`, `site_name` AS siteName, `logo_url` AS logoUrl, `highlight_present` AS highlightPresent, `highlight_absent` AS highlightAbsent, `highlight_inactive` AS highlightInactive, `slogan_text` AS sloganText, `slogan_font_family` AS sloganFontFamily, `slogan_font_weight` AS sloganFontWeight, `slogan_desktop_size` AS sloganDesktopSize, `slogan_mobile_size` AS sloganMobileSize, `slogan_color` AS sloganColor, `slogan_align` AS sloganAlign, `slogan_line_height` AS sloganLineHeight, `hero_description_text` AS heroDescriptionText, `hero_description_font_family` AS heroDescriptionFontFamily, `hero_description_font_weight` AS heroDescriptionFontWeight, `hero_description_desktop_size` AS heroDescriptionDesktopSize, `hero_description_mobile_size` AS heroDescriptionMobileSize, `hero_description_color` AS heroDescriptionColor, `hero_description_align` AS heroDescriptionAlign, `hero_description_line_height` AS heroDescriptionLineHeight, `updated_by` AS updatedBy, `updated_at` AS updatedAt, `created_at` AS createdAt FROM `site_settings` WHERE `id` = ? LIMIT 1",
+      "SELECT `id`, `site_name` AS siteName, `logo_url` AS logoUrl, `auth_tagline` AS authTagline, `auth_feature_one_title` AS authFeatureOneTitle, `auth_feature_one_description` AS authFeatureOneDescription, `auth_feature_two_title` AS authFeatureTwoTitle, `auth_feature_two_description` AS authFeatureTwoDescription, `highlight_present` AS highlightPresent, `highlight_absent` AS highlightAbsent, `highlight_inactive` AS highlightInactive, `slogan_text` AS sloganText, `slogan_font_family` AS sloganFontFamily, `slogan_font_weight` AS sloganFontWeight, `slogan_desktop_size` AS sloganDesktopSize, `slogan_mobile_size` AS sloganMobileSize, `slogan_color` AS sloganColor, `slogan_align` AS sloganAlign, `slogan_line_height` AS sloganLineHeight, `hero_description_text` AS heroDescriptionText, `hero_description_font_family` AS heroDescriptionFontFamily, `hero_description_font_weight` AS heroDescriptionFontWeight, `hero_description_desktop_size` AS heroDescriptionDesktopSize, `hero_description_mobile_size` AS heroDescriptionMobileSize, `hero_description_color` AS heroDescriptionColor, `hero_description_align` AS heroDescriptionAlign, `hero_description_line_height` AS heroDescriptionLineHeight, `updated_by` AS updatedBy, `updated_at` AS updatedAt, `created_at` AS createdAt FROM `site_settings` WHERE `id` = ? LIMIT 1",
       SETTINGS_ID,
     );
     return normalizeRow(rows[0] || {});
@@ -51,6 +59,11 @@ const siteSettingsRoutes: FastifyPluginAsync = async (fastify) => {
       const data: Record<string, unknown> = {
         siteName: str(body.siteName, 255),
         logoUrl: str(body.logoUrl, 5000) || null,
+        authTagline: str(body.authTagline, 120),
+        authFeatureOneTitle: str(body.authFeatureOneTitle, 120),
+        authFeatureOneDescription: str(body.authFeatureOneDescription, 160),
+        authFeatureTwoTitle: str(body.authFeatureTwoTitle, 120),
+        authFeatureTwoDescription: str(body.authFeatureTwoDescription, 160),
         highlightPresent: str(body.highlightPresent, 20),
         highlightAbsent: str(body.highlightAbsent, 20),
         highlightInactive: str(body.highlightInactive, 20),
@@ -86,6 +99,11 @@ const siteSettingsRoutes: FastifyPluginAsync = async (fastify) => {
       const columns: Record<string, string> = {
         siteName: "site_name",
         logoUrl: "logo_url",
+        authTagline: "auth_tagline",
+        authFeatureOneTitle: "auth_feature_one_title",
+        authFeatureOneDescription: "auth_feature_one_description",
+        authFeatureTwoTitle: "auth_feature_two_title",
+        authFeatureTwoDescription: "auth_feature_two_description",
         highlightPresent: "highlight_present",
         highlightAbsent: "highlight_absent",
         highlightInactive: "highlight_inactive",
@@ -119,7 +137,7 @@ const siteSettingsRoutes: FastifyPluginAsync = async (fastify) => {
       );
 
       const rows = await fastify.prisma.$queryRawUnsafe<any[]>(
-        "SELECT `id`, `site_name` AS siteName, `logo_url` AS logoUrl, `highlight_present` AS highlightPresent, `highlight_absent` AS highlightAbsent, `highlight_inactive` AS highlightInactive, `slogan_text` AS sloganText, `slogan_font_family` AS sloganFontFamily, `slogan_font_weight` AS sloganFontWeight, `slogan_desktop_size` AS sloganDesktopSize, `slogan_mobile_size` AS sloganMobileSize, `slogan_color` AS sloganColor, `slogan_align` AS sloganAlign, `slogan_line_height` AS sloganLineHeight, `hero_description_text` AS heroDescriptionText, `hero_description_font_family` AS heroDescriptionFontFamily, `hero_description_font_weight` AS heroDescriptionFontWeight, `hero_description_desktop_size` AS heroDescriptionDesktopSize, `hero_description_mobile_size` AS heroDescriptionMobileSize, `hero_description_color` AS heroDescriptionColor, `hero_description_align` AS heroDescriptionAlign, `hero_description_line_height` AS heroDescriptionLineHeight, `updated_by` AS updatedBy, `updated_at` AS updatedAt, `created_at` AS createdAt FROM `site_settings` WHERE `id` = ? LIMIT 1",
+        "SELECT `id`, `site_name` AS siteName, `logo_url` AS logoUrl, `auth_tagline` AS authTagline, `auth_feature_one_title` AS authFeatureOneTitle, `auth_feature_one_description` AS authFeatureOneDescription, `auth_feature_two_title` AS authFeatureTwoTitle, `auth_feature_two_description` AS authFeatureTwoDescription, `highlight_present` AS highlightPresent, `highlight_absent` AS highlightAbsent, `highlight_inactive` AS highlightInactive, `slogan_text` AS sloganText, `slogan_font_family` AS sloganFontFamily, `slogan_font_weight` AS sloganFontWeight, `slogan_desktop_size` AS sloganDesktopSize, `slogan_mobile_size` AS sloganMobileSize, `slogan_color` AS sloganColor, `slogan_align` AS sloganAlign, `slogan_line_height` AS sloganLineHeight, `hero_description_text` AS heroDescriptionText, `hero_description_font_family` AS heroDescriptionFontFamily, `hero_description_font_weight` AS heroDescriptionFontWeight, `hero_description_desktop_size` AS heroDescriptionDesktopSize, `hero_description_mobile_size` AS heroDescriptionMobileSize, `hero_description_color` AS heroDescriptionColor, `hero_description_align` AS heroDescriptionAlign, `hero_description_line_height` AS heroDescriptionLineHeight, `updated_by` AS updatedBy, `updated_at` AS updatedAt, `created_at` AS createdAt FROM `site_settings` WHERE `id` = ? LIMIT 1",
         SETTINGS_ID,
       );
 
